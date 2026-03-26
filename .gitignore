@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+venv/
+.env
+
+# Model weights
+*.pt
+*.onnx
+*.pth
+
+# Media — recordings, snapshots, dataset images
+recordings/
+snapshots/
+dataset/
+
+# Database
+# database/system.db
+
+# VS Code
+.vscode/
+
+# OS
+Thumbs.db
+.DS_Store
