@@ -10,4 +10,3 @@ jinja2
 python-multipart
 onnxruntime
 pillow
-scikit-learn

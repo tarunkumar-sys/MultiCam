@@ -118,6 +118,10 @@ pip install -r requirements.txt
 ```bash
 python app.py
 ```
+user: test
+pasword: dei@12@12
+ip:10.7.16.48
+port: 554
 
 Open your browser at **http://localhost:8000**
 

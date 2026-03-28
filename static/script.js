@@ -19,6 +19,35 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // -------------------------------------------------------------------------
+    // 1.a People page — list all registered persons
+    // -------------------------------------------------------------------------
+    const personsList = document.getElementById('persons-list');
+    if (personsList) {
+        const loadPersons = async () => {
+            try {
+                const res = await fetch('/api/persons');
+                const persons = await res.json();
+                if (!persons || persons.length === 0) {
+                    personsList.innerHTML = '<p style="color:#666;">No registered persons yet.</p>';
+                } else {
+                    personsList.innerHTML = persons.map(p => `
+                        <div class="detection-card" style="text-align:center;">
+                            <img class="detection-image" src="/${p.image_path}" alt="${p.name}" 
+                                 onerror="this.src='/static/default-avatar.png'">
+                            <div class="detection-info">
+                                <h4>${p.name}</h4>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            } catch {
+                personsList.innerHTML = '<p style="color:#ff3333;">Failed to load persons.</p>';
+            }
+        };
+        loadPersons();
+    }
+
+    // -------------------------------------------------------------------------
     // 2. Camera type dropdown placeholder
     // -------------------------------------------------------------------------
     const camTypeDropdown = document.getElementById('camera-type');
@@ -65,11 +94,45 @@ document.addEventListener('DOMContentLoaded', () => {
                         style="background:#ff3333;color:white;border:none;padding:5px 10px;
                                cursor:pointer;border-radius:3px;width:auto;margin:0;">Remove</button>
                 </li>`).join('');
+            const occSelect = document.getElementById('occ-camera-select');
+            if (occSelect) {
+                const current = occSelect.value;
+                occSelect.innerHTML = '<option value=\"\">All Cameras</option>' + cams.map(c => `<option value="${c}">${c}</option>`).join('');
+                if (current) occSelect.value = current;
+            }
         };
         fetchCameras();
         setInterval(fetchCameras, 5000);
     }
 
+    const occBtn = document.getElementById('occ-load-btn');
+    const occTbody = document.getElementById('occ-tbody');
+    if (occBtn && occTbody) {
+        const loadOcc = async () => {
+            const cam = document.getElementById('occ-camera-select')?.value || '';
+            const start = document.getElementById('occ-start')?.value || '';
+            const end = document.getElementById('occ-end')?.value || '';
+            const params = new URLSearchParams();
+            if (cam) params.append('camera_id', cam);
+            if (start) params.append('start_time', start);
+            if (end) params.append('end_time', end);
+            const res = await fetch(`/api/occupancy?${params.toString()}`);
+            const rows = await res.json();
+            if (!rows || rows.length === 0) {
+                occTbody.innerHTML = '<tr><td style="padding:8px;color:#666;" colspan="3">No data</td></tr>';
+                return;
+            }
+            occTbody.innerHTML = rows.map(r => `
+                <tr style="border-bottom:1px solid #222;">
+                    <td style="padding:8px;">${new Date(r.timestamp).toLocaleString()}</td>
+                    <td style="padding:8px;">${r.camera_id}</td>
+                    <td style="padding:8px;">${r.count}</td>
+                </tr>
+            `).join('');
+        };
+        occBtn.addEventListener('click', loadOcc);
+        loadOcc();
+    }
     // -------------------------------------------------------------------------
     // 5. Search Page — Active search mission + history grid
     // -------------------------------------------------------------------------
@@ -228,80 +291,43 @@ window.deleteCamera = async (camId) => {
     location.reload();
 };
 
-// ---------------------------------------------------------------------------
-// Unknown Clusters
-// ---------------------------------------------------------------------------
-(function () {
-    const grid = document.getElementById('clusters-grid');
-    const refreshBtn = document.getElementById('refresh-clusters-btn');
-    if (!grid) return;
-
-    const renderClusters = (clusters) => {
-        if (!clusters || clusters.length === 0) {
-            grid.innerHTML = '<p style="color:#666;">No unknown persons clustered yet. They appear here once unrecognised faces are detected.</p>';
-            return;
-        }
-
-        grid.innerHTML = clusters.map(c => {
-            const thumb = c.snap_path
-                ? `<img class="cluster-thumb" src="/${c.snap_path}" alt="thumb" onerror="this.style.display='none'">`
-                : `<div class="cluster-thumb" style="display:flex;align-items:center;justify-content:center;color:#555;font-size:2rem;">?</div>`;
-
-            const sightings = (c.sightings || []).map(s =>
-                `<p>📍 ${s.camera_id} &nbsp;🕒 ${new Date(s.timestamp).toLocaleString()}</p>`
-            ).join('') || '<p style="color:#555;">No sightings logged yet.</p>';
-
-            return `
-            <div class="cluster-card" id="cluster-${c.cluster_id}">
-                <div class="cluster-header">
-                    <h4>👤 ${c.label}</h4>
-                    <button class="btn-del-cluster" title="Dismiss cluster"
-                        onclick="deleteCluster(${c.cluster_id})">🗑</button>
-                </div>
-                ${thumb}
-                <div class="cluster-sightings">${sightings}</div>
-                <div class="cluster-register">
-                    <input type="text" id="reg-name-${c.cluster_id}" placeholder="Enter name to register…">
-                    <button onclick="registerCluster(${c.cluster_id})">Register</button>
-                </div>
-            </div>`;
-        }).join('');
-    };
-
-    const loadClusters = async () => {
-        try {
-            const res = await fetch('/api/unknown_clusters');
-            renderClusters(await res.json());
-        } catch {
-            grid.innerHTML = '<p style="color:#ff4444;">Failed to load clusters.</p>';
-        }
-    };
-
-    if (refreshBtn) refreshBtn.addEventListener('click', loadClusters);
-    loadClusters();
-    // Auto-refresh every 30s
-    setInterval(loadClusters, 30000);
-})();
-
-window.registerCluster = async (clusterId) => {
-    const input = document.getElementById(`reg-name-${clusterId}`);
-    const name = input?.value?.trim();
-    if (!name) { alert('Enter a name first.'); return; }
+window.toggleRecording = async (camId, btn) => {
+    btn.disabled = true;
     const fd = new FormData();
-    fd.append('cluster_id', clusterId);
-    fd.append('name', name);
-    const res = await fetch('/api/register_unknown', { method: 'POST', body: fd });
-    const data = await res.json();
-    if (data.status === 'success') {
-        document.getElementById(`cluster-${clusterId}`)?.remove();
-        alert(`Registered as "${name}".`);
-    } else {
-        alert(data.message || 'Registration failed.');
+    fd.append("camera_id", camId);
+    try {
+        const res = await fetch("/api/toggle_recording", { method: "POST", body: fd });
+        const data = await res.json();
+        if (data.status === "success") {
+            if (data.recording) {
+                btn.innerHTML = "⏹ Stop Rec";
+                btn.style.background = "#555";
+            } else {
+                btn.innerHTML = "⏺ Record";
+                btn.style.background = "#ff3333";
+            }
+        } else {
+            alert(data.message || "Failed to toggle recording.");
+        }
+    } catch {
+        alert("Network error.");
     }
+    btn.disabled = false;
 };
 
-window.deleteCluster = async (clusterId) => {
-    if (!confirm('Dismiss this unknown person cluster?')) return;
-    await fetch(`/api/unknown_clusters/${clusterId}`, { method: 'DELETE' });
-    document.getElementById(`cluster-${clusterId}`)?.remove();
-};
+// Sync active recording buttons on load:
+document.addEventListener('DOMContentLoaded', async () => {
+    try {
+        const res = await fetch('/api/recording_status');
+        const data = await res.json();
+        if (data.active_recordings) {
+            data.active_recordings.forEach(cam => {
+                const btn = document.querySelector(`button[data-rec-cam="${cam}"]`);
+                if (btn) {
+                    btn.innerHTML = "⏹ Stop Rec";
+                    btn.style.background = "#555";
+                }
+            });
+        }
+    } catch (e) {}
+});

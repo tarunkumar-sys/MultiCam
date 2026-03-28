@@ -42,22 +42,12 @@ class DatabaseManager:
                     file_path TEXT
                 )
             ''')
-            # Table for unknown face clusters (DBSCAN groups)
             cursor.execute('''
-                CREATE TABLE IF NOT EXISTS unknown_clusters (
-                    id INTEGER PRIMARY KEY,
-                    label TEXT NOT NULL
-                )
-            ''')
-            # Table for individual unknown sightings per cluster
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS unknown_sightings (
+                CREATE TABLE IF NOT EXISTS occupancy_log (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    cluster_id INTEGER NOT NULL,
                     camera_id TEXT,
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    snap_path TEXT,
-                    FOREIGN KEY (cluster_id) REFERENCES unknown_clusters(id)
+                    count INTEGER
                 )
             ''')
             conn.commit()
@@ -171,49 +161,29 @@ class DatabaseManager:
             cursor.execute(query, params)
             return cursor.fetchall()
 
-    # ------------------------------------------------------------------
-    # Unknown cluster methods
-    # ------------------------------------------------------------------
-
-    def create_unknown_cluster(self, cluster_id: int, label: str):
+    def log_occupancy(self, camera_id, count):
         with self.get_connection() as conn:
-            conn.execute(
-                "INSERT OR IGNORE INTO unknown_clusters (id, label) VALUES (?, ?)",
-                (cluster_id, label)
+            cursor = conn.cursor()
+            cursor.execute(
+                'INSERT INTO occupancy_log (camera_id, count) VALUES (?, ?)',
+                (camera_id, int(count))
             )
             conn.commit()
 
-    def add_unknown_sighting(self, cluster_id: int, camera_id: str, snap_path: str):
+    def search_occupancy(self, camera_id=None, start_time=None, end_time=None):
         with self.get_connection() as conn:
-            conn.execute(
-                "INSERT INTO unknown_sightings (cluster_id, camera_id, snap_path) VALUES (?, ?, ?)",
-                (cluster_id, camera_id, snap_path)
-            )
-            conn.commit()
-
-    def get_all_unknown_clusters(self):
-        with self.get_connection() as conn:
-            return conn.execute("SELECT id, label FROM unknown_clusters ORDER BY id").fetchall()
-
-    def get_unknown_clusters_with_sightings(self):
-        """Returns (cluster_id, label, first_snap, camera_id, timestamp)."""
-        with self.get_connection() as conn:
-            return conn.execute('''
-                SELECT uc.id, uc.label,
-                       (SELECT snap_path FROM unknown_sightings WHERE cluster_id=uc.id ORDER BY id LIMIT 1),
-                       us.camera_id, us.timestamp
-                FROM unknown_clusters uc
-                LEFT JOIN unknown_sightings us ON us.cluster_id = uc.id
-                ORDER BY uc.id, us.timestamp
-            ''').fetchall()
-
-    def rename_unknown_cluster(self, cluster_id: int, new_label: str):
-        with self.get_connection() as conn:
-            conn.execute("UPDATE unknown_clusters SET label=? WHERE id=?", (new_label, cluster_id))
-            conn.commit()
-
-    def delete_unknown_cluster(self, cluster_id: int):
-        with self.get_connection() as conn:
-            conn.execute("DELETE FROM unknown_sightings WHERE cluster_id=?", (cluster_id,))
-            conn.execute("DELETE FROM unknown_clusters WHERE id=?", (cluster_id,))
-            conn.commit()
+            cursor = conn.cursor()
+            query = 'SELECT id, camera_id, timestamp, count FROM occupancy_log WHERE 1=1'
+            params = []
+            if camera_id:
+                query += " AND camera_id = ?"
+                params.append(camera_id)
+            if start_time:
+                query += " AND timestamp >= ?"
+                params.append(start_time)
+            if end_time:
+                query += " AND timestamp <= ?"
+                params.append(end_time)
+            query += " ORDER BY timestamp DESC"
+            cursor.execute(query, params)
+            return cursor.fetchall()

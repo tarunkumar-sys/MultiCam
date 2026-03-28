@@ -10,7 +10,8 @@ class CameraHandler:
     def __init__(self, camera_id, source):
         self.camera_id = camera_id
         self.source = source
-        self.cap = None          # opened inside the thread — never blocks __init__
+        self.cap = cv2.VideoCapture(source)
+        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         self.frame = None
         self.frame_id = 0
         self.running = True
@@ -18,31 +19,23 @@ class CameraHandler:
         self.thread = threading.Thread(target=self._update, daemon=True)
         self.thread.start()
 
-    def _open(self):
-        """Open capture; for RTSP pass the URL as a string explicitly."""
-        if isinstance(self.source, str) and self.source.startswith("rtsp://"):
-            cap = cv2.VideoCapture(self.source, cv2.CAP_FFMPEG)
-        else:
-            cap = cv2.VideoCapture(self.source)
-        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-        return cap
-
     def _update(self):
-        self.cap = self._open()
         fails = 0
         while self.running:
             ret, frame = self.cap.read()
             if not ret:
                 fails += 1
-                if fails > 30:
+                if fails > 30:  # Allow 30 retries (approx 1 second interval) before giving up
+                    # Reconnect logic for RTSP
                     self.cap.release()
-                    time.sleep(2)
-                    self.cap = self._open()
+                    time.sleep(1)
+                    self.cap = cv2.VideoCapture(self.source)
+                    self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
                     fails = 0
                 else:
                     time.sleep(0.05)
                 continue
-
+            
             fails = 0
             with self.lock:
                 self.frame = frame
@@ -58,8 +51,7 @@ class CameraHandler:
 
     def stop(self):
         self.running = False
-        if self.cap is not None:
-            self.cap.release()
+        self.cap.release()
 
 from typing import Dict, Any
 

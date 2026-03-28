@@ -1,37 +1,8 @@
 import numpy as np
 import cv2
 import torch
-import ssl
-import urllib.request
 from facenet_pytorch import MTCNN, InceptionResnetV1
-
-
-def _download_with_ssl_bypass(url, dst):
-    """Download a single file with SSL verification disabled, then restore."""
-    _orig = ssl._create_default_https_context
-    ssl._create_default_https_context = ssl._create_unverified_context
-    try:
-        urllib.request.urlretrieve(url, dst)
-    finally:
-        ssl._create_default_https_context = _orig
-
-
-# Monkey-patch facenet_pytorch's downloader to use our targeted bypass
-try:
-    import facenet_pytorch.models.utils.download as _fp_dl
-    _orig_download = _fp_dl.download_url_to_file
-
-    def _patched_download(url, dst, *args, **kwargs):
-        _orig_ctx = ssl._create_default_https_context
-        ssl._create_default_https_context = ssl._create_unverified_context
-        try:
-            _orig_download(url, dst, *args, **kwargs)
-        finally:
-            ssl._create_default_https_context = _orig_ctx
-
-    _fp_dl.download_url_to_file = _patched_download
-except Exception:
-    pass  # If patching fails, weights are likely already cached
+import threading
 
 class FaceRecognizer:
     def __init__(self):
@@ -40,6 +11,7 @@ class FaceRecognizer:
         self.mtcnn = MTCNN(keep_all=True, device=self.device)
         # Resnet for generating embeddings
         self.resnet = InceptionResnetV1(pretrained='vggface2').eval().to(self.device)
+        self.ai_lock = threading.Lock()
         
         self.known_face_encodings = []
         self.known_face_names = []
@@ -73,42 +45,31 @@ class FaceRecognizer:
             face_tensor = torch.tensor(np.transpose(face_resized, (2, 0, 1))).float().unsqueeze(0).to(self.device)
             face_tensor = (face_tensor - 127.5) / 128.0
             
-            with torch.no_grad():
-                embedding = self.resnet(face_tensor).cpu().numpy()[0]
+            with self.ai_lock:
+                with torch.no_grad():
+                    embedding = self.resnet(face_tensor).cpu().numpy()[0]
             
             if self.known_face_encodings:
                 distances = np.linalg.norm(self.known_face_encodings - embedding, axis=1)
                 min_idx = np.argmin(distances)
-                if distances[min_idx] < 1.0: # Threshold stringency (0.8 - 1.2 is typical)
+                # Lowered threshold to 1.15 for better side/profile face detection
+                # Original was 1.0, increased to catch more angles
+                if distances[min_idx] < 1.15:
                     name = self.known_face_names[min_idx]
                     confidence = 1 - (distances[min_idx] / 2.0)
                     return name, float(confidence)
                 
         return "Unknown", 0.0
 
-    def get_embedding_from_bbox(self, frame, face_bbox) -> np.ndarray | None:
-        """Return raw 512-d embedding for a face bbox without doing recognition."""
-        if not face_bbox:
-            return None
-        fx1, fy1, fx2, fy2 = face_bbox
-        face_crop = frame[max(0, fy1):max(0, fy2), max(0, fx1):max(0, fx2)]
-        if face_crop.size == 0:
-            return None
-        face_rgb = cv2.cvtColor(face_crop, cv2.COLOR_BGR2RGB)
-        face_resized = cv2.resize(face_rgb, (160, 160))
-        face_tensor = torch.tensor(np.transpose(face_resized, (2, 0, 1))).float().unsqueeze(0).to(self.device)
-        face_tensor = (face_tensor - 127.5) / 128.0
-        with torch.no_grad():
-            return self.resnet(face_tensor).cpu().numpy()[0]
-
     def get_encoding(self, image):
         """
         Get encoding for registration. Image should be BGR array (from cv2.imread)
         """
         image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        boxes, _ = self.mtcnn.detect(image_rgb)
+        with self.ai_lock:
+            boxes, _ = self.mtcnn.detect(image_rgb)
         
-        if isinstance(boxes, np.ndarray) and len(boxes) > 0:
+        if boxes is not None and hasattr(boxes, "__len__") and len(list(boxes)) > 0:
             fx1, fy1, fx2, fy2 = [int(b) for b in boxes[0]]
             face_crop = image_rgb[max(0, fy1):max(0, fy2), max(0, fx1):max(0, fx2)]
             if face_crop.size > 0:
@@ -116,7 +77,8 @@ class FaceRecognizer:
                 face_tensor = torch.tensor(np.transpose(face_resized, (2, 0, 1))).float().unsqueeze(0).to(self.device)
                 face_tensor = (face_tensor - 127.5) / 128.0
                 
-                with torch.no_grad():
-                    embedding = self.resnet(face_tensor).cpu().numpy()[0]
+                with self.ai_lock:
+                    with torch.no_grad():
+                        embedding = self.resnet(face_tensor).cpu().numpy()[0]
                 return embedding
         return None
