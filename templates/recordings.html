@@ -1,355 +1,111 @@
-<!DOCTYPE html>
-<html lang="en">
+{% extends "base.html" %}
+{% block title %}Recordings — AI Vigilance{% endblock %}
+{% block nav_recordings %}active{% endblock %}
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Vigilance - Recordings</title>
-    <link rel="stylesheet" href="/static/style.css">
-    <link
-        href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Roboto:wght@300;400;700&display=swap"
-        rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        * {
-            box-sizing: border-box;
-        }
-
-        .search-controls {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-
-        .filter-controls {
-            display: flex;
-            gap: 10px;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-
-        .recording-card {
-            background: var(--card-bg);
-            border: 1px solid var(--card-border);
-            border-radius: 8px;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-            transition: transform 0.2s, border-color 0.2s;
-        }
-
-        .recording-card:hover {
-            transform: translateY(-3px);
-            border-color: #525252;
-        }
-
-        .recording-thumbnail {
-            width: 100%;
-            height: 180px;
-            background: #000000;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .recording-thumbnail video {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-        .play-overlay {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 60px;
-            height: 60px;
-            background: rgba(255, 255, 255, 0.9);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 24px;
-            color: black;
-            opacity: 0.9;
-            transition: all 0.2s;
-        }
-
-        .recording-thumbnail:hover .play-overlay {
-            transform: translate(-50%, -50%) scale(1.1);
-            opacity: 1;
-        }
-
-        .recording-info {
-            padding: 15px;
-        }
-
-        .recording-info h4 {
-            margin: 0 0 10px 0;
-            color: var(--text);
-            font-size: 1.1rem;
-        }
-
-        .recording-info p {
-            margin: 5px 0;
-            color: var(--text-muted);
-            font-size: 0.9rem;
-        }
-
-        .recording-actions {
-            display: flex;
-            gap: 8px;
-            margin-top: 10px;
-        }
-
-        .results-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-            gap: 20px;
-        }
-
-        /* Video Modal */
-        .video-modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.95);
-            z-index: 1000;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .video-modal.active {
-            display: flex;
-        }
-
-        .video-modal-content {
-            background: var(--card-bg);
-            border: 1px solid var(--card-border);
-            border-radius: 10px;
-            padding: 20px;
-            max-width: 90%;
-            max-height: 90%;
-            position: relative;
-            width: 900px;
-        }
-
-        .video-modal video {
-            width: 100%;
-            max-height: 70vh;
-            border-radius: 8px;
-        }
-
-        .modal-close {
-            position: absolute;
-            top: -40px;
-            right: 0;
-            background: var(--danger);
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-weight: bold;
-        }
-
-        .modal-info {
-            margin-top: 15px;
-            padding: 15px;
-            background: #171717;
-            border: 1px solid var(--card-border);
-            border-radius: 8px;
-        }
-
-        .modal-info h4 {
-            margin: 0 0 10px 0;
-            color: var(--text);
-        }
-
-        .modal-info p {
-            margin: 5px 0;
-            color: var(--text-muted);
-        }
-    </style>
-</head>
-
-<body>
-    <header>
-        <div class="logo">AI VIGILANCE</div>
-        <nav>
-            <a href="/">Feeds</a>
-            <a href="/people">People</a>
-            <a href="/cameras">Cameras</a>
-            <a href="/search">Search</a>
-            <a href="/recordings_page" class="active">Recordings</a>
-            <a href="/analytics">Analytics</a>
-        </nav>
-    </header>
-
-    <main class="search-page">
-        <section class="filters">
-            <div class="section-title">
-                <h2>Video Recordings</h2>
-            </div>
-            <div class="search-controls">
-                <input type="text" id="camera-search" placeholder="Filter by Camera ID (e.g. Webcam)">
-                <button id="search-recordings-btn" class="btn-primary"><i class="fa-solid fa-search"></i> Load Recordings</button>
-            </div>
-            <div class="filter-controls">
-                <label style="color:var(--text-muted); font-size:0.85rem;">From</label>
-                <input type="datetime-local" id="rec-start-time" style="width: auto; margin-bottom: 0;">
-                <label style="color:var(--text-muted); font-size:0.85rem;">To</label>
-                <input type="datetime-local" id="rec-end-time" style="width: auto; margin-bottom: 0;">
-            </div>
-        </section>
-
-        <section class="results">
-            <div class="results-grid" id="recordings-grid">
-                <p style="color:var(--text-muted);">Click "Load Recordings" to view saved video feeds.</p>
-            </div>
-        </section>
-    </main>
-
-    <!-- Video Preview Modal -->
-    <div id="video-modal" class="video-modal">
-        <div class="video-modal-content">
-            <button class="modal-close" onclick="closeVideoModal()">✕ Close</button>
-            <video id="modal-video" controls>
-                <source src="" type="video/webm">
-                Your browser does not support the video tag.
-            </video>
-            <div class="modal-info" id="modal-info">
-                <h4>Video Information</h4>
-                <p id="modal-camera">Camera: </p>
-                <p id="modal-time">Recorded: </p>
-            </div>
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Recordings</h1>
+        <p class="subtitle">Review and manage saved video captures</p>
+    </div>
+    <div class="filter-bar" style="margin-bottom:0;">
+        <div class="form-group flex items-center gap-sm">
+            <input type="date" id="rec-date">
+            <input type="text" id="rec-cam" placeholder="Camera ID" style="max-width:140px;">
+            <button class="btn btn-ghost btn-sm" onclick="fetchRecordings()">Filter</button>
+            <button class="btn btn-ghost btn-sm" onclick="clearFilters()" title="Clear Filters"><i class="fa-solid fa-rotate-right"></i></button>
         </div>
     </div>
+</div>
 
-    <script>
-        let currentRecordings = [];
+<div id="rec-grid" class="rec-grid">
+    <!-- Populated by JS -->
+</div>
 
-        document.addEventListener('DOMContentLoaded', () => {
-            const searchBtn = document.getElementById('search-recordings-btn');
-            const grid = document.getElementById('recordings-grid');
+<!-- Video Modal -->
+<div class="video-modal" id="video-modal">
+    <div class="video-modal-content">
+        <button class="modal-close" style="position:absolute;top:10px;right:10px;z-index:10;color:#fff;" onclick="closeVideo()"><i class="fa-solid fa-xmark"></i></button>
+        <video id="video-player" controls preload="metadata"></video>
+    </div>
+</div>
+{% endblock %}
 
-            const fetchRecordings = async () => {
-                searchBtn.innerText = 'Loading...';
-                searchBtn.disabled = true;
+{% block scripts %}
+<script>
+async function deleteRecording(id) {
+    if (!confirm('Delete this recording?')) return;
+    try {
+        await fetch('/api/recordings/' + id, { method: 'DELETE' });
+        fetchRecordings();
+    } catch(e) { console.error(e); }
+}
 
-                const cam = document.getElementById('camera-search').value.trim();
-                const start = document.getElementById('rec-start-time').value;
-                const end = document.getElementById('rec-end-time').value;
+async function fetchRecordings() {
+    const grid = document.getElementById('rec-grid');
+    grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1;"><i class="fa-solid fa-spinner fa-spin"></i><p>Loading...</p></div>';
+    
+    const cam = document.getElementById('rec-cam').value;
+    const date = document.getElementById('rec-date').value;
+    
+    let url = '/api/recordings?';
+    if (cam) url += `camera_id=${encodeURIComponent(cam)}&`;
+    if (date) {
+        url += `start_time=${date} 00:00:00&end_time=${date} 23:59:59&`;
+    }
+    
+    try {
+        const res = await fetch(url);
+        const data = await res.json();
+        
+        if (!data.length) {
+            grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1;"><i class="fa-solid fa-film"></i><p>No recordings found.</p></div>';
+            return;
+        }
+        
+        grid.innerHTML = data.map((rec, i) => `
+            <div class="rec-card animate-in" style="animation-delay:${i * 0.05}s">
+                <div class="rec-thumb" onclick="playVideo('${rec.file_path}')">
+                    <video src="/${rec.file_path}#t=0.5" muted preload="metadata"></video>
+                    <div class="rec-play-overlay"><i class="fa-solid fa-play"></i></div>
+                </div>
+                <div class="rec-info">
+                    <h4><i class="fa-solid fa-video" style="color:var(--text-dim);font-size:12px;margin-right:6px;"></i> ${rec.camera_id}</h4>
+                    <p><i class="fa-regular fa-clock" style="width:14px;text-align:center;"></i> ${rec.start_time.split('.')[0]}</p>
+                    <p><i class="fa-solid fa-hourglass-end" style="width:14px;text-align:center;"></i> ${rec.end_time ? rec.end_time.split('.')[0] : 'Processing...'}</p>
+                    <div class="rec-actions">
+                        <button class="btn btn-ghost btn-sm flex-1" onclick="playVideo('${rec.file_path}')">Play</button>
+                        <button class="btn btn-ghost btn-sm" onclick="deleteRecording(${rec.id})" style="color:var(--danger);"><i class="fa-solid fa-trash"></i></button>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    } catch(e) { console.error(e); }
+}
 
-                const params = new URLSearchParams();
-                if (cam) params.append('camera_id', cam);
-                if (start) params.append('start_time', start);
-                if (end) params.append('end_time', end);
+function clearFilters() {
+    document.getElementById('rec-cam').value = '';
+    document.getElementById('rec-date').value = '';
+    fetchRecordings();
+}
 
-                try {
-                    const res = await fetch(`/api/recordings?${params}`);
-                    const data = await res.json();
-                    currentRecordings = data;
+function playVideo(path) {
+    const modal = document.getElementById('video-modal');
+    const player = document.getElementById('video-player');
+    const fullPath = path.startsWith('/') ? path : '/' + path;
+    player.src = fullPath;
+    modal.classList.add('active');
+    player.play();
+}
 
-                    if (!data || data.length === 0) {
-                        grid.innerHTML = '<p style="color:var(--text-muted);padding:1rem;">No recordings found.</p>';
-                    } else {
-                        grid.innerHTML = data.map(r => `
-                            <div class="recording-card">
-                                <div class="recording-thumbnail" onclick="openVideoModal(${r.id})">
-                                    <video preload="metadata" muted>
-                                        <source src="/${r.file_path}#t=0.1" type="video/webm">
-                                    </video>
-                                    <div class="play-overlay"><i class="fa-solid fa-play"></i></div>
-                                </div>
-                                <div class="recording-info">
-                                    <h4><i class="fa-solid fa-video"></i> ${r.camera_id}</h4>
-                                    <p><b>Start:</b> ${new Date(r.start_time).toLocaleString()}</p>
-                                    <p><b>End:</b> ${r.end_time ? new Date(r.end_time).toLocaleString() : 'Ongoing...'}</p>
-                                    <div class="recording-actions">
-                                        <button class="btn-small btn-primary" onclick="openVideoModal(${r.id})"><i class="fa-solid fa-play"></i> Play</button>
-                                        <button class="btn-small btn-danger" onclick="deleteRecording(${r.id})"><i class="fa-solid fa-trash"></i> Delete</button>
-                                    </div>
-                                </div>
-                            </div>
-                        `).join('');
-                    }
-                } catch (e) {
-                    grid.innerHTML = '<p style="color:var(--danger);padding:1rem;">Error loading recordings.</p>';
-                }
+function closeVideo() {
+    const modal = document.getElementById('video-modal');
+    const player = document.getElementById('video-player');
+    modal.classList.remove('active');
+    player.pause();
+    player.src = '';
+}
 
-                searchBtn.innerHTML = '<i class="fa-solid fa-search"></i> Load Recordings';
-                searchBtn.disabled = false;
-            };
-
-            searchBtn.addEventListener('click', fetchRecordings);
-            fetchRecordings();
-        });
-
-        window.openVideoModal = (id) => {
-            const recording = currentRecordings.find(r => r.id === id);
-            if (!recording) return;
-
-            const modal = document.getElementById('video-modal');
-            const video = document.getElementById('modal-video');
-            const cameraEl = document.getElementById('modal-camera');
-            const timeEl = document.getElementById('modal-time');
-
-            video.src = '/' + recording.file_path;
-            cameraEl.textContent = 'Camera: ' + recording.camera_id;
-            timeEl.textContent = 'Recorded: ' + new Date(recording.start_time).toLocaleString();
-
-            modal.classList.add('active');
-            video.play();
-        };
-
-        window.closeVideoModal = () => {
-            const modal = document.getElementById('video-modal');
-            const video = document.getElementById('modal-video');
-            video.pause();
-            video.src = '';
-            modal.classList.remove('active');
-        };
-
-        // Close modal on background click
-        document.getElementById('video-modal')?.addEventListener('click', (e) => {
-            if (e.target.id === 'video-modal') {
-                closeVideoModal();
-            }
-        });
-
-        // Close modal on Escape key
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                closeVideoModal();
-            }
-        });
-
-        window.deleteRecording = async (id) => {
-            if (!confirm('Are you sure you want to delete this video recording? This cannot be undone.')) return;
-            try {
-                const res = await fetch(`/api/recordings/${id}`, { method: 'DELETE' });
-                const data = await res.json();
-                if (data.status === 'success') {
-                    document.getElementById('search-recordings-btn').click(); // refresh
-                } else {
-                    alert(data.message || 'Error deleting recording');
-                }
-            } catch (e) {
-                alert('Failed to delete recording');
-            }
-        };
-    </script>
-    <script src="/static/script.js"></script>
-</body>
-
-</html>
+fetchRecordings();
+</script>
+{% endblock %}

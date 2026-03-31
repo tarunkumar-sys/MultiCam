@@ -1,79 +1,79 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="AI Vigilance: A powerful, high-performance real-time multi-camera surveillance dashboard featuring YOLOv8 object detection, DeepSORT tracking, and advanced Face Recognition.">
-    <meta name="keywords" content="AI surveillance, face recognition, real-time tracking, YOLOv8, object detection, DeepSORT, security camera dashboard, smart surveillance">
-    <meta name="author" content="AI Developer">
-    <meta property="og:title" content="AI Vigilance - Smart Multi-Camera Surveillance Dashboard">
-    <meta property="og:description" content="Monitor your property with advanced AI tracking and facial recognition across multiple live camera feeds in real-time.">
-    <meta property="og:type" content="website">
-    <meta name="robots" content="index, follow">
-    <title>AI Vigilance - Smart Multi-Camera Dashboard | Real-Time Security</title>
-    <link rel="stylesheet" href="/static/style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Roboto:wght@300;400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-</head>
-<body>
-    <header>
-        <div class="logo">AI VIGILANCE</div>
-        <nav>
-            <a href="/" class="active">Feeds</a>
-            <a href="/people">People</a>
-            <a href="/cameras">Cameras</a>
-            <a href="/search">Search</a>
-            <a href="/recordings_page">Recordings</a>
-            <a href="/analytics">Analytics</a>
-        </nav>
-    </header>
+{% extends "base.html" %}
+{% block title %}Feed — AI Vigilance{% endblock %}
+{% block nav_feed %}active{% endblock %}
 
-    <main>
-        <div class="dashboard" style="width:100%;">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
-                <h2 style="margin:0;">Live Feeds</h2>
-                <div>
-                    {% if total_pages > 1 %}
-                        {% if page <= 1 %}
-                        <a href="#" class="btn-secondary btn-small" style="margin-right:10px; pointer-events:none; opacity:0.5; text-decoration:none;"><i class="fa-solid fa-chevron-left"></i> Prev</a>
-                        {% else %}
-                        <a href="/?page={{ page - 1 }}&per_page={{ per_page }}" class="btn-secondary btn-small" style="margin-right:10px; text-decoration:none;"><i class="fa-solid fa-chevron-left"></i> Prev</a>
-                        {% endif %}
-                        
-                        <span style="color:var(--text-muted); font-size:0.9rem; margin: 0 10px;">Page {{ page }} of {{ total_pages }}</span>
-                        
-                        {% if page >= total_pages %}
-                        <a href="#" class="btn-secondary btn-small" style="margin-left:10px; pointer-events:none; opacity:0.5; text-decoration:none;">Next <i class="fa-solid fa-chevron-right"></i></a>
-                        {% else %}
-                        <a href="/?page={{ page + 1 }}&per_page={{ per_page }}" class="btn-secondary btn-small" style="margin-left:10px; text-decoration:none;">Next <i class="fa-solid fa-chevron-right"></i></a>
-                        {% endif %}
-                    {% endif %}
-                </div>
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Live Feed</h1>
+        <p class="subtitle">{{ cameras|length }} active camera{{ 's' if cameras|length != 1 }} — Page {{ page }} of {{ total_pages }}</p>
+    </div>
+    <div class="flex gap-sm items-center">
+        {% if page > 1 %}
+        <a href="/?page={{ page - 1 }}&per_page={{ per_page }}" class="btn btn-ghost btn-sm"><i class="fa-solid fa-chevron-left"></i> Prev</a>
+        {% endif %}
+        {% if page < total_pages %}
+        <a href="/?page={{ page + 1 }}&per_page={{ per_page }}" class="btn btn-ghost btn-sm">Next <i class="fa-solid fa-chevron-right"></i></a>
+        {% endif %}
+    </div>
+</div>
+
+{% if cameras|length == 0 %}
+<div class="empty-state">
+    <i class="fa-solid fa-video-slash"></i>
+    <p>No active cameras. Add a camera from the <strong>Cameras</strong> tab.</p>
+</div>
+{% else %}
+<div class="feed-grid">
+    {% for cam in cameras %}
+    <div class="card animate-in" style="animation-delay: {{ loop.index0 * 0.08 }}s">
+        <div class="card-header">
+            <h3>{{ cam }}</h3>
+            <div class="flex gap-sm items-center">
+                <span class="live-indicator">Live</span>
+                <button class="btn btn-ghost btn-sm" onclick="toggleRec('{{ cam }}')" id="rec-btn-{{ cam }}"><i class="fa-solid fa-circle" style="color:var(--danger);font-size:8px;"></i> Rec</button>
             </div>
-            <div class="feed-grid" id="feed-grid">
-                {% for cam in cameras %}
-                <div class="feed-container" id="feed-{{ cam }}">
-                    <div class="feed-header">
-                        <h3>{{ cam }}</h3>
-                        <div style="display: flex; gap: 10px; align-items: center;">
-                            <span class="live-indicator">LIVE</span>
-                            <button data-rec-cam="{{ cam }}" onclick="toggleRecording('{{ cam }}', this)" class="btn-danger btn-small">
-                                <i class="fa-solid fa-circle"></i> Record
-                            </button>
-                        </div>
-                    </div>
-                    <img src="/video_feed/{{ cam }}" alt="Live Feed">
-                </div>
-                {% endfor %}
-            </div>
-            {% if not cameras %}
-            <div class="no-cameras">
-                <p>No active cameras on this page. Connect cameras or change page.</p>
-            </div>
-            {% endif %}
         </div>
-    </main>
+        <div class="card-body" style="padding:0;">
+            <img src="/video_feed/{{ cam }}" alt="Feed {{ cam }}" loading="lazy" style="width:100%; display:block; aspect-ratio: 16/9; object-fit: cover;">
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+{% endblock %}
 
-    <script src="/static/script.js"></script>
-</body>
-</html>
+{% block scripts %}
+<script>
+async function toggleRec(camId) {
+    const fd = new FormData();
+    fd.append('camera_id', camId);
+    try {
+        const res = await fetch('/api/toggle_recording', { method: 'POST', body: fd });
+        const data = await res.json();
+        const btn = document.getElementById('rec-btn-' + camId);
+        if (data.recording) {
+            btn.classList.add('btn-accent');
+            btn.classList.remove('btn-ghost');
+            btn.innerHTML = '<i class="fa-solid fa-stop" style="font-size:8px;margin-right:4px;"></i> Stop';
+        } else {
+            btn.classList.remove('btn-accent');
+            btn.classList.add('btn-ghost');
+            btn.innerHTML = '<i class="fa-solid fa-circle" style="color:var(--danger);font-size:8px;margin-right:4px;"></i> Rec';
+        }
+    } catch(e) { console.error(e); }
+}
+
+// Check initial recording status
+fetch('/api/recording_status').then(r=>r.json()).then(data => {
+    (data.active_recordings || []).forEach(camId => {
+        const btn = document.getElementById('rec-btn-' + camId);
+        if (btn) {
+            btn.classList.add('btn-accent');
+            btn.classList.remove('btn-ghost');
+            btn.innerHTML = '<i class="fa-solid fa-stop" style="font-size:8px;margin-right:4px;"></i> Stop';
+        }
+    });
+});
+</script>
+{% endblock %}

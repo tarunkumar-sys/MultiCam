@@ -1,84 +1,130 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Vigilance - Cameras</title>
-    <link rel="stylesheet" href="/static/style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Roboto:wght@300;400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-</head>
-<body>
-    <header>
-        <div class="logo">AI VIGILANCE</div>
-        <nav>
-            <a href="/">Feeds</a>
-            <a href="/people">People</a>
-            <a href="/cameras" class="active">Cameras</a>
-            <a href="/search">Search</a>
-            <a href="/recordings_page">Recordings</a>
-            <a href="/analytics">Analytics</a>
-        </nav>
-    </header>
-    <main>
-        <div class="sidebar" style="width:100%; max-width:600px;">
-            <section class="add-camera">
-                <div class="section-title">
-                    <h2>Add Camera</h2>
-                </div>
-                <form id="camera-form" style="display:flex; flex-direction:column; gap:0.5rem;">
-                    <input type="text" name="camera_id" placeholder="Camera Name (e.g. Cam1)" required>
-                    <select name="camera_type" id="camera-type" style="margin-bottom:0;">
-                        <option value="webcam">Local Webcam</option>
-                        <option value="rtsp">RTSP Stream</option>
-                        <option value="ipwebcam">IP Webcam App (Android)</option>
-                        <option value="droidcam">DroidCam</option>
-                    </select>
-                    <input type="text" name="source" id="camera-source" placeholder="Camera Index (e.g. 0)" style="margin-bottom:1rem;" required>
-                    <button type="submit" class="btn-primary"><i class="fa-solid fa-plug"></i> Connect</button>
-                </form>
-            </section>
-        </div>
-        <div class="dashboard">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
-                <h2 style="margin:0;">Active Cameras</h2>
+{% extends "base.html" %}
+{% block title %}Cameras — AI Vigilance{% endblock %}
+{% block nav_camera %}active{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Camera Management</h1>
+        <p class="subtitle">Add, remove, and monitor camera sources</p>
+    </div>
+</div>
+
+<div class="two-col">
+    <!-- Left: Add Camera Form -->
+    <div class="section-panel animate-in">
+        <h3><i class="fa-solid fa-plus" style="color:var(--accent);margin-right:6px;font-size:13px;"></i> Add Camera</h3>
+        <form id="add-camera-form">
+            <div class="form-group">
+                <label>Camera ID</label>
+                <input type="text" name="camera_id" id="cam-id" placeholder="e.g. cam1, lobby, entrance" required>
             </div>
-            <ul id="active-cameras-list" style="list-style: none; padding: 0;">
-                <li style="color:var(--text-muted);">Loading cameras...</li>
-            </ul>
-            <div style="margin-top:2rem;">
-                <div class="section-title">
-                    <h2>Occupancy Log</h2>
-                </div>
-                <div class="filter-controls">
-                    <select id="occ-camera-select" style="min-width: 200px; margin-bottom: 0;">
-                        <option value="">All Cameras</option>
-                    </select>
-                    <label style="color:var(--text-muted); font-size:0.85rem;">From</label>
-                    <input type="datetime-local" id="occ-start" style="margin-bottom: 0;">
-                    <label style="color:var(--text-muted); font-size:0.85rem;">To</label>
-                    <input type="datetime-local" id="occ-end" style="margin-bottom: 0;">
-                    <button id="occ-load-btn" class="btn-secondary">Load</button>
-                    <button id="occ-delete-all-btn" class="btn-danger">Delete All</button>
-                </div>
-                <div id="occ-results" style="overflow:auto; border-radius: 8px; border: 1px solid var(--card-border); background: var(--card-bg);">
-                    <table style="width:100%; border-collapse:collapse; text-align: left;">
-                        <thead style="background: #000000; border-bottom: 1px solid var(--card-border);">
-                            <tr>
-                                <th style="padding:1rem; color:var(--text-muted); font-size: 0.85rem; font-weight: 600; text-transform:uppercase;">Time</th>
-                                <th style="padding:1rem; color:var(--text-muted); font-size: 0.85rem; font-weight: 600; text-transform:uppercase;">Camera</th>
-                                <th style="padding:1rem; color:var(--text-muted); font-size: 0.85rem; font-weight: 600; text-transform:uppercase;">Count</th>
-                                <th style="padding:1rem; width:80px; color:var(--text-muted); font-size: 0.85rem; font-weight: 600; text-transform:uppercase;">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody id="occ-tbody">
-                            <tr><td style="padding:1rem; color:var(--text-muted);" colspan="4">No data</td></tr>
-                        </tbody>
-                    </table>
-                </div>
+            <div class="form-group">
+                <label>Type</label>
+                <select name="camera_type" id="cam-type" onchange="updateSourceHint()">
+                    <option value="webcam">Webcam</option>
+                    <option value="rtsp">RTSP Stream</option>
+                    <option value="droidcam">DroidCam</option>
+                    <option value="ipwebcam">IP Webcam</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label id="source-label">Source</label>
+                <input type="text" name="source" id="cam-source" placeholder="0 (webcam index)" required>
+            </div>
+            <button type="submit" class="btn btn-accent" style="width:100%;">
+                <i class="fa-solid fa-plus"></i> Add Camera
+            </button>
+            <div id="cam-msg" style="margin-top:12px;font-size:0.8rem;text-align:center;min-height:20px;"></div>
+        </form>
+    </div>
+
+    <!-- Right: Active Cameras List -->
+    <div>
+        <div class="section-panel animate-in" style="animation-delay:0.1s">
+            <h3><i class="fa-solid fa-signal" style="color:var(--success);margin-right:6px;font-size:13px;"></i> Active Cameras</h3>
+            <div id="camera-list" class="cam-list">
+                <div class="empty-state"><i class="fa-solid fa-video-slash"></i><p>No cameras connected</p></div>
             </div>
         </div>
-    </main>
-    <script src="/static/script.js?v=2"></script>
-</body>
-</html>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function updateSourceHint() {
+    const type = document.getElementById('cam-type').value;
+    const label = document.getElementById('source-label');
+    const input = document.getElementById('cam-source');
+    const hints = {
+        webcam: { label: 'Webcam Index', placeholder: '0' },
+        rtsp: { label: 'RTSP URL', placeholder: 'rtsp://user:pass@192.168.1.100:554/stream1' },
+        droidcam: { label: 'Phone IP', placeholder: '192.168.1.50' },
+        ipwebcam: { label: 'Phone IP', placeholder: '192.168.1.50' },
+    };
+    const h = hints[type] || hints.webcam;
+    label.textContent = h.label;
+    input.placeholder = h.placeholder;
+}
+
+document.getElementById('add-camera-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const msg = document.getElementById('cam-msg');
+    const fd = new FormData(e.target);
+    try {
+        const res = await fetch('/add_camera', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (data.status === 'success') {
+            msg.style.color = 'var(--success)';
+            msg.textContent = 'Camera added!';
+            e.target.reset();
+            loadCameras();
+        } else {
+            msg.style.color = 'var(--danger)';
+            msg.textContent = data.message || 'Failed to add camera';
+        }
+    } catch(err) {
+        msg.style.color = 'var(--danger)';
+        msg.textContent = 'Connection error';
+    }
+});
+
+async function loadCameras() {
+    try {
+        const res = await fetch('/api/cameras');
+        const cameras = await res.json();
+        const list = document.getElementById('camera-list');
+        if (!cameras.length) {
+            list.innerHTML = '<div class="empty-state"><i class="fa-solid fa-video-slash"></i><p>No cameras connected</p></div>';
+            return;
+        }
+        list.innerHTML = cameras.map(cam => `
+            <div class="cam-item">
+                <div class="cam-item-info">
+                    <div class="cam-status active"></div>
+                    <div>
+                        <strong style="font-size:0.85rem;color:var(--text);">${cam}</strong>
+                    </div>
+                </div>
+                <div class="cam-item-actions">
+                    <button class="btn btn-ghost btn-sm" onclick="deleteCam('${cam}')">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        `).join('');
+    } catch(e) { console.error(e); }
+}
+
+async function deleteCam(camId) {
+    if (!confirm('Remove camera ' + camId + '?')) return;
+    const fd = new FormData();
+    fd.append('camera_id', camId);
+    await fetch('/delete_camera', { method: 'POST', body: fd });
+    loadCameras();
+}
+
+loadCameras();
+</script>
+{% endblock %}

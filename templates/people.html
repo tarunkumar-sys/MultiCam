@@ -1,48 +1,183 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Vigilance - People</title>
-    <link rel="stylesheet" href="/static/style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Roboto:wght@300;400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-</head>
-<body>
-    <header>
-        <div class="logo">AI VIGILANCE</div>
-        <nav>
-            <a href="/">Feeds</a>
-            <a href="/people" class="active">People</a>
-            <a href="/cameras">Cameras</a>
-            <a href="/search">Search</a>
-            <a href="/recordings_page">Recordings</a>
-            <a href="/analytics">Analytics</a>
-        </nav>
-    </header>
-    <main>
-        <div class="sidebar" style="width:100%; max-width:600px;">
-            <section class="registration">
-                <div class="section-title">
-                    <h2>Register Person</h2>
+{% extends "base.html" %}
+{% block title %}People — AI Vigilance{% endblock %}
+{% block nav_people %}active{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Registered Persons</h1>
+        <p class="subtitle">Manage identities and alert preferences</p>
+    </div>
+    <button class="btn btn-accent" onclick="openRegisterModal()">
+        <i class="fa-solid fa-plus"></i> Register New
+    </button>
+</div>
+
+<div class="card" style="margin-bottom: 32px;">
+    <div class="card-header">
+        <h3><i class="fa-solid fa-users-viewfinder" style="color:var(--accent);margin-right:6px;"></i> Monitored Identities</h3>
+    </div>
+    <div class="card-body">
+        <div id="people-list" class="person-grid">
+            <div class="empty-state" style="grid-column:1/-1;">
+                <i class="fa-solid fa-spinner fa-spin"></i>
+                <p>Loading...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Register Modal -->
+<div class="modal-overlay" id="register-modal">
+    <div class="modal-card">
+        <div class="modal-header">
+            <h2>Register New Person</h2>
+            <button class="modal-close" onclick="closeRegisterModal()"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body">
+            <form id="add-person-form" enctype="multipart/form-data">
+                <div class="modal-section">
+                    <h4>Profile Details</h4>
+                    <p class="modal-hint">Provide a clear face image for accurate recognition.</p>
                 </div>
-                <form id="register-form" style="display:flex; flex-direction:column; gap:0.5rem;">
-                    <input type="text" name="name" placeholder="Full Name" required>
-                    <input type="file" name="file" accept="image/*" style="margin-bottom:1rem;" required>
-                    <button type="submit" class="btn-primary"><i class="fa-solid fa-user-plus"></i> Register</button>
-                </form>
-                <div id="reg-status" style="margin-top: 1rem; color: var(--text-muted); font-size: 0.9rem;"></div>
-            </section>
+                <div class="form-group">
+                    <label>Name</label>
+                    <input type="text" name="name" id="person-name" placeholder="Full name (e.g. John Doe)" required>
+                </div>
+                <div class="form-group">
+                    <label>Face Image</label>
+                    <input type="file" name="file" id="person-file" accept="image/*" required onchange="previewImg(this)">
+                    <div id="img-preview" style="display:none;margin-top:12px;text-align:center;">
+                        <img id="preview-src" src="" alt="preview" style="max-width:120px;border-radius:var(--radius-sm);border:1px solid var(--border);">
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-ghost" onclick="closeRegisterModal()">Cancel</button>
+                    <button type="submit" class="btn btn-accent" id="add-btn">
+                        Register Person
+                    </button>
+                </div>
+                <div id="add-msg" class="settings-msg"></div>
+            </form>
         </div>
-        <div class="dashboard">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
-                <h2 style="margin:0;">Registered Persons</h2>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const registerModal = document.getElementById('register-modal');
+
+function openRegisterModal() {
+    registerModal.classList.add('open');
+    document.body.classList.add('modal-open');
+}
+
+function closeRegisterModal() {
+    registerModal.classList.remove('open');
+    document.body.classList.remove('modal-open');
+    document.getElementById('add-person-form').reset();
+    document.getElementById('img-preview').style.display = 'none';
+    document.getElementById('add-msg').textContent = '';
+}
+
+// Close modal when clicking outside the card
+registerModal.addEventListener('click', (e) => {
+    if (e.target === registerModal) closeRegisterModal();
+});
+
+function previewImg(input) {
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById('preview-src').src = e.target.result;
+            document.getElementById('img-preview').style.display = 'block';
+        }
+        reader.readAsDataURL(input.files[0]);
+    }
+}
+
+async function loadPeople() {
+    try {
+        const res = await fetch('/api/person_alerts');
+        const data = await res.json();
+        const grid = document.getElementById('people-list');
+        
+        if (!data.length) {
+            grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1;"><i class="fa-solid fa-users-slash"></i><p>No persons registered yet.</p></div>';
+            return;
+        }
+
+        grid.innerHTML = data.map(p => `
+            <div class="person-card-item animate-in">
+                <div style="position:relative;display:inline-block;">
+                    <img src="/${p.image_path}" alt="${p.name}">
+                    <div style="position:absolute;bottom:10px;right:-5px;width:14px;height:14px;border-radius:50%;background:${p.alert_enabled ? 'var(--success)' : 'var(--text-dim)'};border:2px solid var(--bg-surface);" title="${p.alert_enabled ? 'Alerts ON' : 'Alerts OFF'}"></div>
+                </div>
+                <h4>${p.name}</h4>
+                <div class="flex-col gap-sm" style="margin-top:12px;">
+                    <label style="font-size:0.75rem;color:var(--text-dim);display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;">
+                        <input type="checkbox" ${p.alert_enabled ? 'checked' : ''} onchange="toggleAlert(${p.id}, this.checked)">
+                        Alert when seen
+                    </label>
+                    <button class="btn btn-danger-outline btn-sm w-full" style="padding:4px;width:100%;" onclick="deletePerson(${p.id})">Delete Identity</button>
+                </div>
             </div>
-            <div id="persons-list" class="results-grid">
-                <p style="color:var(--text-muted);">Loading registered persons...</p>
-            </div>
-        </div>
-    </main>
-    <script src="/static/script.js"></script>
-</body>
-</html>
+        `).join('');
+    } catch(e) { console.error(e); }
+}
+
+async function toggleAlert(id, enabled) {
+    await fetch(`/api/person_alerts/${id}`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({enabled: enabled})
+    });
+    loadPeople();
+}
+
+async function deletePerson(id) {
+    if (!confirm('Completely remove this person?')) return;
+    await fetch(`/api/persons/${id}`, { method: 'DELETE' });
+    loadPeople();
+}
+
+document.getElementById('add-person-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('add-btn');
+    const msg = document.getElementById('add-msg');
+    
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Processing...';
+    msg.textContent = '';
+    
+    try {
+        const fd = new FormData(e.target);
+        const res = await fetch('/register', { method: 'POST', body: fd });
+        const data = await res.json();
+        
+        if (data.status === 'success') {
+            msg.className = 'settings-msg success';
+            msg.textContent = 'Person successfully registered!';
+            // Success delay before closing
+            setTimeout(() => {
+                closeRegisterModal();
+                loadPeople();
+            }, 800);
+        } else {
+            msg.className = 'settings-msg error';
+            msg.textContent = data.message || 'Face registration failed.';
+            btn.disabled = false;
+            btn.innerHTML = 'Register Person';
+        }
+    } catch(err) {
+        msg.className = 'settings-msg error';
+        msg.textContent = 'Connection error.';
+        btn.disabled = false;
+        btn.innerHTML = 'Register Person';
+    }
+});
+
+loadPeople();
+</script>
+{% endblock %}

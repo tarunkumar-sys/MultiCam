@@ -1,5 +1,7 @@
 import sqlite3
 import os
+import hashlib
+import time
 
 class DatabaseManager:
     def __init__(self, db_path='database/system.db'):
@@ -50,8 +52,149 @@ class DatabaseManager:
                     count INTEGER
                 )
             ''')
+            # ─── NEW: Detection logs (real-time, 24h auto-delete) ────────
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS detection_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    person_name TEXT,
+                    camera_id TEXT,
+                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    snapshot_path TEXT,
+                    is_known INTEGER DEFAULT 0
+                )
+            ''')
+            # ─── NEW: App settings (credentials etc.) ────────────────────
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS app_settings (
+                    key TEXT PRIMARY KEY,
+                    value TEXT
+                )
+            ''')
+            # ─── NEW: Person alert config ────────────────────────────────
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS person_alerts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    person_id INTEGER UNIQUE,
+                    enabled INTEGER DEFAULT 1,
+                    FOREIGN KEY (person_id) REFERENCES registered_persons (id)
+                )
+            ''')
             conn.commit()
 
+        # Seed default admin credentials if not set
+        self._seed_defaults()
+
+    def _seed_defaults(self):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT value FROM app_settings WHERE key='admin_user'")
+            if cursor.fetchone() is None:
+                hashed = hashlib.sha256("admin123".encode()).hexdigest()
+                cursor.execute("INSERT INTO app_settings (key, value) VALUES ('admin_user', 'admin')")
+                cursor.execute("INSERT INTO app_settings (key, value) VALUES ('admin_pass', ?)", (hashed,))
+                conn.commit()
+
+    # ─── Auth ─────────────────────────────────────────────────────────
+    def verify_login(self, username, password):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT value FROM app_settings WHERE key='admin_user'")
+            row = cursor.fetchone()
+            if not row or row[0] != username:
+                return False
+            cursor.execute("SELECT value FROM app_settings WHERE key='admin_pass'")
+            row = cursor.fetchone()
+            if not row:
+                return False
+            hashed = hashlib.sha256(password.encode()).hexdigest()
+            return row[0] == hashed
+
+    def update_credentials(self, new_user, new_pass):
+        hashed = hashlib.sha256(new_pass.encode()).hexdigest()
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('admin_user', ?)", (new_user,))
+            cursor.execute("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('admin_pass', ?)", (hashed,))
+            conn.commit()
+
+    def get_setting(self, key):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT value FROM app_settings WHERE key=?", (key,))
+            row = cursor.fetchone()
+            return row[0] if row else None
+
+    # ─── Detection Logs (24h auto-delete) ─────────────────────────────
+    def log_detection_event(self, person_name, camera_id, snapshot_path, is_known=False):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                'INSERT INTO detection_logs (person_name, camera_id, snapshot_path, is_known) VALUES (?, ?, ?, ?)',
+                (person_name, camera_id, snapshot_path, 1 if is_known else 0)
+            )
+            conn.commit()
+
+    def get_detection_logs(self, limit=200):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT id, person_name, camera_id, timestamp, snapshot_path, is_known
+                FROM detection_logs
+                WHERE timestamp >= datetime('now', '-24 hours')
+                ORDER BY timestamp DESC
+                LIMIT ?
+            ''', (limit,))
+            return cursor.fetchall()
+
+    def cleanup_old_logs(self):
+        """Delete logs older than 24 hours and their snapshot files."""
+        import os
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            # Get old snapshot paths before deleting
+            cursor.execute('''
+                SELECT snapshot_path FROM detection_logs
+                WHERE timestamp < datetime('now', '-24 hours')
+            ''')
+            old_snaps = cursor.fetchall()
+            for (path,) in old_snaps:
+                if path and os.path.exists(path):
+                    try:
+                        os.remove(path)
+                    except Exception:
+                        pass
+            cursor.execute("DELETE FROM detection_logs WHERE timestamp < datetime('now', '-24 hours')")
+            conn.commit()
+            return cursor.rowcount
+
+    # ─── Person Alerts ─────────────────────────────────────────────────
+    def get_person_alert_status(self, person_id):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT enabled FROM person_alerts WHERE person_id=?", (person_id,))
+            row = cursor.fetchone()
+            return row[0] == 1 if row else False
+
+    def set_person_alert(self, person_id, enabled):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT OR REPLACE INTO person_alerts (person_id, enabled) VALUES (?, ?)",
+                (person_id, 1 if enabled else 0)
+            )
+            conn.commit()
+
+    def get_all_person_alerts(self):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT rp.id, rp.name, rp.image_path, COALESCE(pa.enabled, 0) as alert_on
+                FROM registered_persons rp
+                LEFT JOIN person_alerts pa ON rp.id = pa.person_id
+            ''')
+            return cursor.fetchall()
+
+    # ─── Existing methods ────────────────────────────────────────────
     def register_person(self, name, image_path, encoding):
         with self.get_connection() as conn:
             cursor = conn.cursor()
@@ -113,7 +256,6 @@ class DatabaseManager:
             if end_time:
                 query += " AND start_time <= ?"
                 params.append(end_time)
-            
             query += " ORDER BY start_time DESC"
             cursor.execute(query, params)
             return cursor.fetchall()
@@ -130,12 +272,19 @@ class DatabaseManager:
             cursor.execute('DELETE FROM video_recordings WHERE id = ?', (record_id,))
             conn.commit()
 
-
     def get_registered_persons(self):
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT * FROM registered_persons')
             return cursor.fetchall()
+
+    def delete_person(self, person_id):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM person_alerts WHERE person_id = ?', (person_id,))
+            cursor.execute('DELETE FROM registered_persons WHERE id = ?', (person_id,))
+            conn.commit()
+            return cursor.rowcount > 0
 
     def search_detections(self, name=None, start_time=None, end_time=None):
         with self.get_connection() as conn:
@@ -156,7 +305,6 @@ class DatabaseManager:
             if end_time:
                 query += " AND d.timestamp <= ?"
                 params.append(end_time)
-            
             query += " ORDER BY d.timestamp DESC"
             cursor.execute(query, params)
             return cursor.fetchall()
@@ -213,36 +361,26 @@ class DatabaseManager:
             conn.commit()
             return cursor.rowcount
 
+    # ─── Analytics ─────────────────────────────────────────────────────
     def analytics_summary(self, camera_id=None, hours=24):
-        """
-        Summary numbers for the five stat cards at the top of the dashboard.
-        Returns a dict with keys:
-            total_detections, today_detections, unique_persons,
-            registered_persons, unknown_detections,
-            peak_occupancy, peak_time, busiest_hour, busiest_avg
-        """
         h = int(hours)
         cam_d = "AND camera_id = ?" if camera_id else ""
         cam_p = [camera_id] if camera_id else []
 
         with self.get_connection() as conn:
             cur = conn.cursor()
-
-            # Total detections in window
             cur.execute(f"""
                 SELECT COUNT(*) FROM detections
                 WHERE timestamp >= datetime('now', '-{h} hours') {cam_d}
             """, cam_p)
             total = cur.fetchone()[0]
 
-            # Today's detections
             cur.execute(f"""
                 SELECT COUNT(*) FROM detections
                 WHERE date(timestamp) = date('now') {cam_d}
             """, cam_p)
             today = cur.fetchone()[0]
 
-            # Unique known persons
             cur.execute(f"""
                 SELECT COUNT(DISTINCT person_id) FROM detections
                 WHERE person_id IS NOT NULL
@@ -250,11 +388,9 @@ class DatabaseManager:
             """, cam_p)
             unique_persons = cur.fetchone()[0]
 
-            # Total registered persons
             cur.execute("SELECT COUNT(*) FROM registered_persons")
             registered = cur.fetchone()[0]
 
-            # Unknown detections (no person_id)
             cur.execute(f"""
                 SELECT COUNT(*) FROM detections
                 WHERE person_id IS NULL
@@ -262,7 +398,6 @@ class DatabaseManager:
             """, cam_p)
             unknown = cur.fetchone()[0]
 
-            # Peak occupancy row
             occ_cam = "AND camera_id = ?" if camera_id else ""
             cur.execute(f"""
                 SELECT MAX(count), timestamp FROM occupancy_log
@@ -272,7 +407,6 @@ class DatabaseManager:
             peak_cnt  = peak_row[0] or 0
             peak_time = peak_row[1] if peak_row else None
 
-            # Busiest hour over last 7 days
             cur.execute(f"""
                 SELECT CAST(strftime('%H', timestamp) AS INTEGER) AS hr,
                        AVG(count) AS avg_c
@@ -297,14 +431,9 @@ class DatabaseManager:
         }
 
     def analytics_occupancy_trend(self, camera_id=None, hours=24):
-        """
-        Hourly average occupancy for the line chart.
-        Returns list of {"hour": "2024-01-15T14:00:00", "avg_count": 2.5}
-        """
         h   = int(hours)
         cam = "AND camera_id = ?" if camera_id else ""
         prm = [camera_id] if camera_id else []
-
         with self.get_connection() as conn:
             cur = conn.cursor()
             cur.execute(f"""
@@ -319,14 +448,8 @@ class DatabaseManager:
             return [{"hour": r[0], "avg_count": r[1]} for r in cur.fetchall()]
 
     def analytics_heatmap(self, camera_id=None):
-        """
-        7-day × 24-hour occupancy heatmap.
-        Returns list of {"dow": 0-6, "hour": 0-23, "avg_count": float}
-        where dow 0 = Sunday, 6 = Saturday (SQLite strftime %w convention).
-        """
         cam = "AND camera_id = ?" if camera_id else ""
         prm = [camera_id] if camera_id else []
-
         with self.get_connection() as conn:
             cur = conn.cursor()
             cur.execute(f"""
@@ -342,15 +465,10 @@ class DatabaseManager:
             return [{"dow": r[0], "hour": r[1], "avg_count": r[2]} for r in cur.fetchall()]
 
     def analytics_top_persons(self, camera_id=None, hours=24, limit=10):
-        """
-        Top N persons by detection count in the given window.
-        Returns list of {"name": str, "count": int, "top_camera": str}
-        """
         h   = int(hours)
         lim = int(limit)
         cam = "AND d.camera_id = ?" if camera_id else ""
         prm = [camera_id] if camera_id else []
-
         with self.get_connection() as conn:
             cur = conn.cursor()
             cur.execute(f"""
@@ -379,10 +497,6 @@ class DatabaseManager:
                     for r in cur.fetchall()]
 
     def analytics_per_camera(self, hours=24):
-        """
-        Detection count per camera (for bar chart).
-        Returns list of {"camera_id": str, "count": int}
-        """
         h = int(hours)
         with self.get_connection() as conn:
             cur = conn.cursor()
@@ -396,14 +510,9 @@ class DatabaseManager:
             return [{"camera_id": r[0], "count": r[1]} for r in cur.fetchall()]
 
     def analytics_identity_breakdown(self, camera_id=None, hours=24):
-        """
-        Known vs unknown detection totals for the donut chart.
-        Returns {"known": int, "unknown": int}
-        """
         h   = int(hours)
         cam = "AND camera_id = ?" if camera_id else ""
         prm = [camera_id] if camera_id else []
-
         with self.get_connection() as conn:
             cur = conn.cursor()
             cur.execute(f"""

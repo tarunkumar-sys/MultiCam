@@ -1,396 +1,177 @@
-document.addEventListener('DOMContentLoaded', () => {
+/* ═══════════════════════════════════════════════════════════════════════════
+   AI VIGILANCE — Client Logic
+   File: static/script.js
+   ═══════════════════════════════════════════════════════════════════════════ */
 
-    // -------------------------------------------------------------------------
-    // 1. Register Person
-    // -------------------------------------------------------------------------
-    const regForm = document.getElementById('register-form');
-    if (regForm) {
-        regForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const status = document.getElementById('reg-status');
-            status.innerText = "Registering...";
-            try {
-                const res = await fetch('/register', { method: 'POST', body: new FormData(regForm) });
-                const data = await res.json();
-                status.innerText = data.message;
-                if (data.status === 'success') regForm.reset();
-            } catch { status.innerText = "Error registering."; }
-        });
+// ─── Sidebar Toggle ──────────────────────────────────────────────────────
+const sidebar = document.getElementById('sidebar');
+const mainContent = document.getElementById('main-content');
+const toggleBtn = document.getElementById('sb-toggle');
+
+function toggleSidebar() {
+    sidebar.classList.toggle('expanded');
+    localStorage.setItem('sidebar_expanded', sidebar.classList.contains('expanded'));
+}
+
+// Restore sidebar state
+if (localStorage.getItem('sidebar_expanded') === 'true') {
+    sidebar.classList.add('expanded');
+} else {
+    sidebar.classList.remove('expanded');
+}
+
+
+// ─── Settings Modal ─────────────────────────────────────────────────────
+const settingsModal = document.getElementById('settings-modal');
+
+function openSettings() {
+    settingsModal.classList.add('open');
+    document.body.classList.add('modal-open');
+}
+
+function closeSettings() {
+    settingsModal.classList.remove('open');
+    document.body.classList.remove('modal-open');
+    document.getElementById('settings-msg').textContent = '';
+    document.getElementById('settings-form').reset();
+}
+
+// Close on outside click
+settingsModal.addEventListener('click', (e) => {
+    if (e.target === settingsModal) closeSettings();
+});
+// Close on Escape key
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && settingsModal.classList.contains('open')) {
+        closeSettings();
     }
+});
 
-    // -------------------------------------------------------------------------
-    // 1.a People page — list all registered persons
-    // -------------------------------------------------------------------------
-    const personsList = document.getElementById('persons-list');
-    if (personsList) {
-        const loadPersons = async () => {
-            try {
-                const res = await fetch('/api/persons');
-                const persons = await res.json();
-                if (!persons || persons.length === 0) {
-                    personsList.innerHTML = '<p style="color:#666;">No registered persons yet.</p>';
-                } else {
-                    personsList.innerHTML = persons.map(p => `
-                        <div class="detection-card" style="text-align:center;">
-                            <img class="detection-image" src="/${p.image_path}" alt="${p.name}" 
-                                 onerror="this.src='/static/default-avatar.png'">
-                            <div class="detection-info">
-                                <h4>${p.name}</h4>
-                            </div>
-                        </div>
-                    `).join('');
-                }
-            } catch {
-                personsList.innerHTML = '<p style="color:#ff3333;">Failed to load persons.</p>';
-            }
-        };
-        loadPersons();
-    }
-
-    // -------------------------------------------------------------------------
-    // 2. Camera type dropdown placeholder
-    // -------------------------------------------------------------------------
-    const camTypeDropdown = document.getElementById('camera-type');
-    const camSourceInput = document.getElementById('camera-source');
-    if (camTypeDropdown && camSourceInput) {
-        const placeholders = {
-            webcam: 'Camera Index (e.g. 0)',
-            rtsp: 'e.g. rtsp://user:pass@ip:554',
-            ipwebcam: 'e.g. 192.168.1.100  (port auto-appended)',
-            droidcam: 'e.g. 192.168.1.100  (port 4747 auto-appended)'
-        };
-        camTypeDropdown.addEventListener('change', (e) => {
-            camSourceInput.placeholder = placeholders[e.target.value] || '';
-        });
-    }
-
-    // -------------------------------------------------------------------------
-    // 3. Add Camera form
-    // -------------------------------------------------------------------------
-    const camForm = document.getElementById('camera-form');
-    if (camForm) {
-        camForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const res = await fetch('/add_camera', { method: 'POST', body: new FormData(camForm) });
-            const data = await res.json();
-            if (data.status === 'success') location.reload();
-            else alert(data.message || 'Failed to connect camera.');
-        });
-    }
-
-    // -------------------------------------------------------------------------
-    // 4. Manage cameras list
-    // -------------------------------------------------------------------------
-    const cameraList = document.getElementById('active-cameras-list');
-    if (cameraList) {
-        const fetchCameras = async () => {
-            const res = await fetch('/api/cameras_info');
-            const cams = await res.json();
-            cameraList.innerHTML = cams.map(cam => `
-                <li style="display:flex;justify-content:space-between;align-items:center;
-                           background:#222;padding:10px;margin-bottom:5px;border-radius:5px;">
-                    <span>${cam.id} <small style="color:${cam.status==='active'?'#2ecc71':'#e74c3c'}">(${cam.status})</small></span>
-                    <div>
-                        <button onclick="toggleCameraStatus('${cam.id}', this)"
-                            style="background:${cam.status === 'active' ? '#f39c12' : '#2ecc71'};color:white;border:none;padding:5px 10px;
-                                   cursor:pointer;border-radius:3px;width:auto;margin:0;margin-right:5px;">
-                            ${cam.status === 'active' ? 'Stop' : 'Start'}
-                        </button>
-                        <button onclick="deleteCamera('${cam.id}')"
-                            style="background:#ff3333;color:white;border:none;padding:5px 10px;
-                                   cursor:pointer;border-radius:3px;width:auto;margin:0;">Remove</button>
-                    </div>
-                </li>`).join('');
-            const occSelect = document.getElementById('occ-camera-select');
-            if (occSelect) {
-                const current = occSelect.value;
-                occSelect.innerHTML = '<option value=\"\">All Cameras</option>' + cams.map(c => `<option value="${c.id}">${c.id}</option>`).join('');
-                if (current) occSelect.value = current;
-            }
-        };
-        fetchCameras();
-        setInterval(fetchCameras, 5000);
-    }
-
-    const occBtn = document.getElementById('occ-load-btn');
-    const occTbody = document.getElementById('occ-tbody');
-    if (occBtn && occTbody) {
-        const getOccParams = () => {
-            const cam = document.getElementById('occ-camera-select')?.value || '';
-            const start = document.getElementById('occ-start')?.value || '';
-            const end = document.getElementById('occ-end')?.value || '';
-            const params = new URLSearchParams();
-            if (cam) params.append('camera_id', cam);
-            if (start) params.append('start_time', start);
-            if (end) params.append('end_time', end);
-            return params;
-        };
-
-        const loadOcc = async () => {
-            const params = getOccParams();
-            const res = await fetch(`/api/occupancy?${params.toString()}`);
-            const rows = await res.json();
-            if (!rows || rows.length === 0) {
-                occTbody.innerHTML = '<tr><td style="padding:8px;color:#666;" colspan="4">No data</td></tr>';
-                return;
-            }
-            occTbody.innerHTML = rows.map(r => `
-                <tr style="border-bottom:1px solid #222;">
-                    <td style="padding:8px;">${new Date(r.timestamp).toLocaleString()}</td>
-                    <td style="padding:8px;">${r.camera_id}</td>
-                    <td style="padding:8px;">${r.count}</td>
-                    <td style="padding:8px;">
-                        <button onclick="deleteOccLog(${r.id})" style="background:#ff3333;color:white;border:none;padding:2px 8px;border-radius:3px;cursor:pointer;">Clear</button>
-                    </td>
-                </tr>
-            `).join('');
-        };
-        occBtn.addEventListener('click', loadOcc);
-        loadOcc();
-
-        const occDelAllBtn = document.getElementById('occ-delete-all-btn');
-        if (occDelAllBtn) {
-            occDelAllBtn.addEventListener('click', async () => {
-                if (!confirm("Are you sure you want to delete all filtered occupancy logs?")) return;
-                try {
-                    const params = getOccParams();
-                    const res = await fetch(`/api/occupancy_all?${params.toString()}`, { method: 'DELETE' });
-                    const data = await res.json();
-                    if (data.status === 'success') {
-                        loadOcc();
-                    }
-                } catch {
-                    alert("Network error.");
-                }
-            });
+// Update Credentials
+document.getElementById('settings-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('save-settings-btn');
+    const msg = document.getElementById('settings-msg');
+    
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
+    msg.textContent = '';
+    
+    try {
+        const fd = new FormData(e.target);
+        const res = await fetch('/api/update_credentials', { method: 'POST', body: fd });
+        const data = await res.json();
+        
+        if (data.status === 'success') {
+            msg.className = 'settings-msg success';
+            msg.innerHTML = '<i class="fa-solid fa-check-circle"></i> ' + data.message;
+            e.target.reset();
+            setTimeout(closeSettings, 2000);
+        } else {
+            msg.className = 'settings-msg error';
+            msg.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i> ' + (data.message || 'Update failed');
         }
+    } catch(err) {
+        msg.className = 'settings-msg error';
+        msg.textContent = 'Connection error';
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-check"></i> Save Changes';
     }
-    // -------------------------------------------------------------------------
-    // 5. Search Page — Active search mission + history grid
-    // -------------------------------------------------------------------------
-    const missionBanner = document.getElementById('mission-banner');
-    const missionText   = document.getElementById('mission-text');
-    const stopBtn       = document.getElementById('stop-btn');
-    const searchBtn     = document.getElementById('search-btn');
-    const searchImgBtn  = document.getElementById('search-image-btn');
-    const clearBtn      = document.getElementById('clear-btn');
-    const grid          = document.getElementById('results-grid');
-    const targetPreview = document.getElementById('target-preview');
-    const targetPhoto   = document.getElementById('target-photo');
-    const targetName    = document.getElementById('target-name');
+});
 
-    // Render detection cards
-    const renderGrid = (data) => {
-        if (!grid) return;
-        if (!data || data.length === 0) {
-            grid.innerHTML = '<p style="color:#666;padding:1rem;">No detections found.</p>';
+
+// ─── Authentication ───────────────────────────────────────────────────────
+async function logout() {
+    if (!confirm('Are you sure you want to log out?')) return;
+    try {
+        await fetch('/api/logout', { method: 'POST' });
+        window.location.href = '/login';
+    } catch(e) { console.error('Logout failed:', e); }
+}
+
+
+// ─── Alert Polling (In-App Only) ──────────────────────────────────────────
+const alertPanel = document.getElementById('alert-panel');
+const alertBadge = document.getElementById('alert-badge');
+const alertList = document.getElementById('alert-list');
+let alertPollingInterval;
+
+function toggleAlertPanel() {
+    alertPanel.classList.toggle('open');
+}
+
+// Close panel if clicked outside
+document.addEventListener('click', (e) => {
+    const btn = document.getElementById('alert-bell');
+    if (!alertPanel.contains(e.target) && !btn.contains(e.target)) {
+        alertPanel.classList.remove('open');
+    }
+});
+
+function formatAlertDate(isoStr) {
+    if (!isoStr) return 'Unknown time';
+    const d = new Date(isoStr);
+    return `${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}:${d.getSeconds().toString().padStart(2,'0')}`;
+}
+
+async function fetchAlerts() {
+    try {
+        const res = await fetch('/api/alerts');
+        if (res.status === 401) {
+            window.location.href = '/login';
             return;
         }
-        grid.innerHTML = data.map(d => `
-            <div class="detection-card">
-                <img class="detection-image" src="/${d.image_path}" alt="snap"
-                     onerror="this.src='data:image/svg+xml,<svg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'160\\' height=\\'120\\'><rect fill=\\'%23333\\' width=\\'100%25\\' height=\\'100%25\\'/><text fill=\\'%23aaa\\' x=\\'50%25\\' y=\\'50%25\\' text-anchor=\\'middle\\' dy=\\'.3em\\'>No Image</text></svg>'">
-                <div class="detection-info">
-                    <h4>${d.person_name}</h4>
-                    <p>📍 ${d.camera_id}</p>
-                    <p>🕒 ${new Date(d.timestamp).toLocaleString()}</p>
-                </div>
-            </div>`).join('');
-    };
-
-    // Fetch history by name + date filters
-    const fetchHistory = async (name = '') => {
-        const start = document.getElementById('start-time')?.value || '';
-        const end   = document.getElementById('end-time')?.value || '';
-        const params = new URLSearchParams({ name, start_time: start, end_time: end });
-        const res = await fetch(`/api/search?${params}`);
-        renderGrid(await res.json());
-    };
-
-    // Check whether a search is already running on page load
-    const syncMissionBanner = async () => {
-        const res = await fetch('/api/active_search');
-        const data = await res.json();
-        if (data.active && missionBanner) {
-            missionBanner.classList.remove('hidden');
-            if (missionText) missionText.textContent = `🔴 Actively searching for: ${data.name}`;
-            if (targetPreview) targetPreview.classList.remove('hidden');
-            if (targetName) targetName.textContent = data.name;
-            fetchHistory(data.name);
-        }
-    };
-    if (missionBanner) syncMissionBanner();
-
-    // Start Search — triggers live mission AND loads history
-    if (searchBtn) {
-        searchBtn.addEventListener('click', async () => {
-            const name = document.getElementById('name-search')?.value?.trim();
-            if (!name) { alert('Please enter a name.'); return; }
-
-            searchBtn.disabled = true;
-            searchBtn.innerText = 'Starting...';
-
-            const fd = new FormData();
-            fd.append('name', name);
-            const res  = await fetch('/api/start_search', { method: 'POST', body: fd });
-            const data = await res.json();
-
-            if (data.status === 'success') {
-                if (missionBanner) { missionBanner.classList.remove('hidden'); }
-                if (missionText)   { missionText.textContent = `🔴 Actively searching for: ${name}`; }
-                // Show target person photo from DB
-                if (targetPreview) targetPreview.classList.remove('hidden');
-                if (targetName)    targetName.textContent = data.name;
-                if (targetPhoto && data.image_path) {
-                    targetPhoto.src = '/' + data.image_path;
-                }
-                fetchHistory(name); // Show existing history below
-            } else {
-                alert(data.message || 'Person not registered.');
-            }
-
-            searchBtn.disabled = false;
-            searchBtn.innerText = '🔍 Start Search';
-        });
-    }
-
-    // Stop Search
-    if (stopBtn) {
-        stopBtn.addEventListener('click', async () => {
-            await fetch('/api/stop_search', { method: 'POST' });
-            if (missionBanner) missionBanner.classList.add('hidden');
-            if (targetPreview) targetPreview.classList.add('hidden');
-        });
-    }
-
-    // Search by Image
-    if (searchImgBtn) {
-        searchImgBtn.addEventListener('click', async () => {
-            const fileInput = document.getElementById('image-search-input');
-            if (!fileInput || fileInput.files.length === 0) { alert('Select an image first.'); return; }
-            const fd = new FormData();
-            fd.append('file', fileInput.files[0]);
-            searchImgBtn.disabled = true;
-            searchImgBtn.innerText = 'Searching...';
-            const res = await fetch('/api/search_by_image', { method: 'POST', body: fd });
-            renderGrid(await res.json());
-            searchImgBtn.disabled = false;
-            searchImgBtn.innerText = '📷 Search by Photo';
-        });
-    }
-
-    // Clear History
-    if (clearBtn) {
-        clearBtn.addEventListener('click', async () => {
-            if (!confirm('Clear all detection history? This cannot be undone.')) return;
-            clearBtn.disabled = true;
-            clearBtn.innerText = 'Clearing...';
-            try {
-                await fetch('/clear_history', { method: 'POST' });
-                renderGrid([]);
-                clearBtn.innerText = '✓ Cleared!';
-                clearBtn.style.background = '#2ecc71';
-                setTimeout(() => {
-                    clearBtn.innerText = '🗑 Clear History';
-                    clearBtn.style.background = '';
-                    clearBtn.disabled = false;
-                }, 3000);
-            } catch {
-                clearBtn.innerText = '🗑 Clear History';
-                clearBtn.disabled = false;
-            }
-        });
-    }
-
-    // Initial load on search page (all history)
-    if (grid && !missionBanner) fetchHistory();
-    if (grid && missionBanner) {
-        // Already handled by syncMissionBanner; load all if no active search
-        fetch('/api/active_search').then(r => r.json()).then(d => {
-            if (!d.active) fetchHistory();
-        });
-    }
-});
-
-// -------------------------------------------------------------------------
-// Global helpers
-// -------------------------------------------------------------------------
-window.deleteCamera = async (camId) => {
-    if (!confirm(`Remove camera "${camId}"?`)) return;
-    const fd = new FormData();
-    fd.append('camera_id', camId);
-    await fetch('/delete_camera', { method: 'POST', body: fd });
-    location.reload();
-};
-
-window.toggleCameraStatus = async (camId, btn) => {
-    btn.disabled = true;
-    const fd = new FormData();
-    fd.append('camera_id', camId);
-    try {
-        const res = await fetch('/toggle_camera', { method: 'POST', body: fd });
-        const data = await res.json();
-        if (data.status === 'success') {
-            const isActive = data.active;
-            btn.style.background = isActive ? '#f39c12' : '#2ecc71';
-            btn.innerHTML = isActive ? 'Stop' : 'Start';
-        }
-    } catch {
-        alert("Failed to toggle camera.");
-    }
-    btn.disabled = false;
-};
-
-window.deleteOccLog = async (logId) => {
-    if (!confirm("Delete this log entry?")) return;
-    try {
-        const res = await fetch(`/api/occupancy/${logId}`, { method: 'DELETE' });
-        const data = await res.json();
-        if (data.status === 'success') {
-            document.getElementById('occ-load-btn')?.click();
-        }
-    } catch {
-        alert("Network error.");
-    }
-};
-
-window.toggleRecording = async (camId, btn) => {
-    btn.disabled = true;
-    const fd = new FormData();
-    fd.append("camera_id", camId);
-    try {
-        const res = await fetch("/api/toggle_recording", { method: "POST", body: fd });
-        const data = await res.json();
-        if (data.status === "success") {
-            if (data.recording) {
-                btn.innerHTML = "⏹ Stop Rec";
-                btn.style.background = "#555";
-            } else {
-                btn.innerHTML = "⏺ Record";
-                btn.style.background = "#ff3333";
-            }
+        const alerts = await res.json();
+        const unreadCountResp = await fetch('/api/alerts/unread_count');
+        const unreadData = await unreadCountResp.json();
+        
+        // Update badge
+        if (unreadData.count > 0) {
+            alertBadge.style.display = 'flex';
+            alertBadge.textContent = unreadData.count > 99 ? '99+' : unreadData.count;
+            
+            // Add pulse animation if newly unread
+            alertBadge.animate([
+                { transform: 'scale(1)' },
+                { transform: 'scale(1.4)' },
+                { transform: 'scale(1)' }
+            ], { duration: 300, iterations: 1 });
+            
         } else {
-            alert(data.message || "Failed to toggle recording.");
+            alertBadge.style.display = 'none';
         }
-    } catch {
-        alert("Network error.");
-    }
-    btn.disabled = false;
-};
+        
+        // Update panel
+        if (!alerts.length) {
+            alertList.innerHTML = '<p class="alert-empty"><i class="fa-solid fa-check-double" style="font-size:1.5rem;display:block;margin-bottom:8px;opacity:0.5;"></i>No new alerts</p>';
+            return;
+        }
+        
+        alertList.innerHTML = alerts.map(a => `
+            <div class="alert-item ${!a.read ? 'unread' : ''}">
+                <div class="alert-item-icon">
+                    <i class="fa-solid fa-user-shield"></i>
+                </div>
+                <div class="alert-item-content">
+                    <strong>${a.person_name}</strong>
+                    <small><i class="fa-solid fa-video" style="font-size:10px;"></i> ${a.camera_id} — ${formatAlertDate(a.timestamp)}</small>
+                </div>
+            </div>
+        `).join('');
+        
+    } catch(e) { console.error('Alert polling failed', e); }
+}
 
-// Sync active recording buttons on load:
-document.addEventListener('DOMContentLoaded', async () => {
+async function markAllRead() {
     try {
-        const res = await fetch('/api/recording_status');
-        const data = await res.json();
-        if (data.active_recordings) {
-            data.active_recordings.forEach(cam => {
-                const btn = document.querySelector(`button[data-rec-cam="${cam}"]`);
-                if (btn) {
-                    btn.innerHTML = "⏹ Stop Rec";
-                    btn.style.background = "#555";
-                }
-            });
-        }
-    } catch (e) {}
-});
+        await fetch('/api/alerts/read', { method: 'POST' });
+        fetchAlerts();
+    } catch(e) { console.error(e); }
+}
+
+// Start polling
+if (window.location.pathname !== '/login') {
+    fetchAlerts();
+    alertPollingInterval = setInterval(fetchAlerts, 5000); // Check every 5 seconds
+}
