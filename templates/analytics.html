@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Vigilance — Analytics</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Roboto+Mono:wght@300;400;500&family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        :root {
+            --primary:  #ffffff;
+            --bg:       #000000;
+            --card-bg:  #111111;
+            --cb:       #262626;
+            --text:     #ffffff;
+            --muted:    #a1a1aa;
+            --red:      #ef4444;
+            --yellow:   #f59e0b;
+            --blue:     #d4d4d8;
+            --purple:   #a1a1aa;
+            --grid:     rgba(255,255,255,0.03);
+        }
+        body { background: var(--bg); color: var(--text); font-family: 'Roboto', sans-serif; }
+
+        /* scanline effect */
+        body::before {
+            content:''; position:fixed; inset:0; pointer-events:none; z-index:9999;
+            background: repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.07) 2px,rgba(0,0,0,0.07) 4px);
+        }
+
+        /* ── DASH WRAPPER ─────────────────────────────────────────────────── */
+        .dash { padding: 26px 30px 60px; max-width: 1600px; margin: 0 auto; }
+
+        /* ── PAGE HEADER ──────────────────────────────────────────────────── */
+        .pg-head {
+            display: flex; align-items: flex-end;
+            justify-content: space-between; flex-wrap: wrap;
+            gap: 14px; margin-bottom: 26px;
+            padding-bottom: 18px; border-bottom: 1px solid #111122;
+            position: relative;
+        }
+        .pg-head::after {
+            content:''; position:absolute; bottom:-1px; left:0;
+            width:100px; height:1px; background: var(--primary);
+        }
+        .pg-eyebrow {
+            font-family: 'Roboto Mono', monospace;
+            font-size: 9px; letter-spacing: 4px;
+            text-transform: uppercase; color: var(--primary);
+            margin-bottom: 5px;
+        }
+        .pg-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 20px; font-weight: 700;
+            color: #fff; letter-spacing: 2px;
+        }
+
+        /* ── CONTROLS ─────────────────────────────────────────────────────── */
+        .controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+        .ctrl {
+            background: #0c0c18; border: 1px solid #1e1e38;
+            color: #aaa; padding: 7px 12px; border-radius: 4px;
+            font-size: 12px; font-family: 'Roboto Mono', monospace;
+            cursor: pointer; outline: none; transition: border-color .2s;
+        }
+        .ctrl:hover, .ctrl:focus { border-color: var(--primary); }
+        .ctrl option { background: #0c0c18; }
+        .btn-go {
+            background: transparent; border: 1px solid var(--primary);
+            color: var(--primary); padding: 7px 16px; border-radius: 4px;
+            font-family: 'Roboto Mono', monospace; font-size: 10px;
+            letter-spacing: 2px; text-transform: uppercase;
+            cursor: pointer; transition: background .2s, color .2s;
+        }
+        .btn-go:hover { background: var(--primary); color: #000; }
+        .btn-go:disabled { opacity: .35; cursor: not-allowed; }
+
+        /* ── STAT STRIP ───────────────────────────────────────────────────── */
+        .stat-strip {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 12px; margin-bottom: 18px;
+        }
+        @media (max-width:1100px) { .stat-strip { grid-template-columns: repeat(3,1fr); } }
+        @media (max-width:640px)  { .stat-strip { grid-template-columns: 1fr 1fr; } }
+
+        .sc {
+            background: var(--card-bg);
+            border: 1px solid var(--cb);
+            border-radius: 5px; padding: 16px 18px 14px;
+            position: relative; overflow: hidden;
+            transition: border-color .25s, box-shadow .25s;
+            animation: rise .4s ease both;
+        }
+        .sc:hover { border-color: #525252; box-shadow: 0 0 20px rgba(255,255,255,.02); }
+        .sc::before, .sc::after {
+            content:''; position:absolute; width:9px; height:9px;
+        }
+        .sc::before { top:0; left:0;
+            border-top: 2px solid var(--primary);
+            border-left: 2px solid var(--primary); }
+        .sc::after  { bottom:0; right:0;
+            border-bottom: 2px solid var(--primary);
+            border-right:  2px solid var(--primary); }
+        .sc-ico  { font-size:16px; opacity:.4; margin-bottom:8px; display:block; }
+        .sc-lbl  {
+            font-family:'Roboto Mono',monospace; font-size:9px;
+            letter-spacing:2.5px; text-transform:uppercase;
+            color:var(--muted); margin-bottom:5px;
+        }
+        .sc-val  {
+            font-family:'Orbitron',sans-serif; font-size:26px; font-weight:700;
+            color:var(--text); line-height:1; letter-spacing:1px;
+        }
+        .sc-sub  {
+            font-family:'Roboto Mono',monospace; font-size:10px;
+            color:#222238; margin-top:5px;
+        }
+
+        /* ── CARD SHELL ───────────────────────────────────────────────────── */
+        .cc {
+            background: var(--card-bg);
+            border: 1px solid var(--cb); border-radius: 5px;
+            padding: 18px 20px 16px; position: relative; overflow: hidden;
+            animation: rise .5s ease both;
+        }
+        /* grid texture */
+        .cc::before {
+            content:''; position:absolute; inset:0; pointer-events:none;
+            background-image:
+                linear-gradient(var(--grid) 1px, transparent 1px),
+                linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+            background-size: 32px 32px;
+        }
+
+        /* ── CARD HEADER ──────────────────────────────────────────────────── */
+        .ch {
+            display: flex; justify-content: space-between;
+            align-items: flex-start; margin-bottom: 14px; position: relative;
+        }
+        .ct-label {
+            font-family:'Roboto Mono',monospace; font-size:9px;
+            letter-spacing:3px; text-transform:uppercase; color:var(--muted);
+        }
+        .ct-name {
+            font-family:'Orbitron',sans-serif; font-size:13px;
+            font-weight:600; color:#ccd; letter-spacing:1px; margin-top:3px;
+        }
+        .pill {
+            font-family:'Roboto Mono',monospace; font-size:8px;
+            letter-spacing:2px; text-transform:uppercase;
+            padding:3px 8px; border-radius:2px; flex-shrink:0;
+        }
+        .pill-live { background:rgba(239,68,68,.12); color:var(--red);
+                     border:1px solid rgba(239,68,68,.25); animation:blink 2s infinite; }
+        .pill-db   { background:rgba(255,255,255,.07); color:var(--primary);
+                     border:1px solid rgba(255,255,255,.18); }
+
+        /* ── LAYOUT GRIDS ─────────────────────────────────────────────────── */
+        .g2 { display:grid; grid-template-columns:1.8fr 1fr; gap:14px; margin-bottom:14px; }
+        .g2b{ display:grid; grid-template-columns:1fr 1fr;   gap:14px; margin-bottom:14px; }
+        @media(max-width:1100px){ .g2,.g2b{ grid-template-columns:1fr; } }
+
+        .chart-wrap { position:relative; height:220px; }
+        .chart-wrap.short { height:170px; }
+
+        /* ── HEATMAP CARD ─────────────────────────────────────────────────── */
+        .hm-card {
+            background: var(--card-bg); border: 1px solid var(--cb);
+            border-radius:5px; padding:18px 20px 20px;
+            margin-bottom:14px; position:relative; overflow:hidden;
+            animation: rise .55s ease both;
+        }
+        .hm-card::before {
+            content:''; position:absolute; inset:0; pointer-events:none;
+            background-image:
+                linear-gradient(var(--grid) 1px,transparent 1px),
+                linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+            background-size:32px 32px;
+        }
+
+        .hm-scroll { overflow-x:auto; padding-bottom:4px; }
+        .hm-grid {
+            display:grid;
+            grid-template-columns: 36px repeat(24, minmax(24px,1fr));
+            gap:3px; min-width:700px; position:relative;
+        }
+        .hm-hl {
+            font-family:'Roboto Mono',monospace; font-size:8px;
+            color:var(--text-muted); text-align:center; padding-bottom:3px;
+        }
+        .hm-dl {
+            font-family:'Roboto Mono',monospace; font-size:10px; color:var(--text-muted);
+            display:flex; align-items:center; justify-content:flex-end;
+            padding-right:7px;
+        }
+        .hm-cell {
+            height:24px; border-radius:3px; background:#171717;
+            cursor:default; transition: transform .12s, filter .12s;
+        }
+        .hm-cell:hover { transform:scale(1.25); z-index:20; filter:brightness(1.5); }
+
+        .hm-leg { display:flex; align-items:center; gap:8px; margin-top:12px; }
+        .hm-leg-txt {
+            font-family:'Roboto Mono',monospace; font-size:9px;
+            letter-spacing:1px; text-transform:uppercase; color:var(--text-muted);
+        }
+        .hm-leg-bar {
+            flex:1; max-width:180px; height:7px; border-radius:4px;
+            background:linear-gradient(to right,#171717,rgba(255,255,255,.12),rgba(255,255,255,.5),#ffffff);
+        }
+
+        /* ── TOP PERSONS TABLE ────────────────────────────────────────────── */
+        .pt { width:100%; border-collapse:collapse; position:relative; }
+        .pt th {
+            font-family:'Roboto Mono',monospace; font-size:8px;
+            letter-spacing:2px; text-transform:uppercase; color:#223;
+            text-align:left; padding:5px 8px;
+            border-bottom:1px solid #111120;
+        }
+        .pt td { padding:8px; border-bottom:1px solid #0e0e1c; vertical-align:middle; }
+        .pt tr:last-child td { border-bottom:none; }
+        .pt tbody tr:hover td { background:rgba(255,255,255,.05); }
+        .rk {
+            font-family:'Orbitron',monospace; font-size:10px; color:#223;
+        }
+        .rk1{color:#ffd700;} .rk2{color:#c0c0c0;} .rk3{color:#cd7f32;}
+        .pname { font-size:12px; color:#ccd; font-weight:500; }
+        .pcam  { font-family:'Roboto Mono',monospace; font-size:9px; color:#2a2a4a; }
+        .bar-r { display:flex; align-items:center; gap:7px; }
+        .bar-t { flex:1; height:4px; background:#111120; border-radius:2px; overflow:hidden; }
+        .bar-f { height:100%; border-radius:2px; background:var(--primary); transition:width .6s; }
+        .bar-n { font-family:'Orbitron',monospace; font-size:10px;
+                 color:var(--primary); min-width:28px; text-align:right; }
+
+        /* ── STATES ───────────────────────────────────────────────────────── */
+        .s-box {
+            display:flex; align-items:center; justify-content:center;
+            height:100%; gap:9px; color:#1e1e38;
+            font-family:'Roboto Mono',monospace; font-size:11px;
+        }
+        .spin {
+            width:14px; height:14px; border:2px solid #181828;
+            border-top-color:var(--primary); border-radius:50%;
+            animation:spin .7s linear infinite; flex-shrink:0;
+        }
+
+        /* ── TOOLTIP ──────────────────────────────────────────────────────── */
+        #hm-tip {
+            position:fixed; display:none;
+            background:#171717; border:1px solid #525252;
+            color:var(--text-muted); font-family:'Roboto Mono',monospace; font-size:11px;
+            padding:5px 11px; border-radius:3px;
+            pointer-events:none; z-index:9998; white-space:nowrap;
+            box-shadow:0 4px 18px rgba(0,0,0,.6);
+        }
+        #hm-tip span { color:var(--text); font-weight: 600; }
+
+        /* ── ANIMATIONS ───────────────────────────────────────────────────── */
+        @keyframes rise {
+            from { opacity:0; transform:translateY(10px); }
+            to   { opacity:1; transform:translateY(0); }
+        }
+        @keyframes spin  { to { transform:rotate(360deg); } }
+        @keyframes blink { 50% { opacity:.2; } }
+
+        .sc:nth-child(1){animation-delay:.04s}
+        .sc:nth-child(2){animation-delay:.08s}
+        .sc:nth-child(3){animation-delay:.12s}
+        .sc:nth-child(4){animation-delay:.16s}
+        .sc:nth-child(5){animation-delay:.20s}
+
+        ::-webkit-scrollbar{width:4px;height:4px}
+        ::-webkit-scrollbar-track{background:#0a0a0f}
+        ::-webkit-scrollbar-thumb{background:#1a1a28;border-radius:2px}
+        ::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.25)}
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="logo">AI VIGILANCE</div>
+    <nav>
+        <a href="/">Feeds</a>
+        <a href="/people">People</a>
+        <a href="/cameras">Cameras</a>
+        <a href="/search">Search</a>
+        <a href="/recordings_page">Recordings</a>
+        <a href="/analytics" class="active">Analytics</a>
+    </nav>
+</header>
+
+<div class="dash">
+
+    <!-- Page header -->
+    <div class="pg-head">
+        <div>
+            <div class="pg-eyebrow">System Intelligence</div>
+            <h1 class="pg-title">Analytics &amp; Heatmaps</h1>
+        </div>
+        <div class="controls">
+            <select class="ctrl" id="cam-filter">
+                <option value="">All Cameras</option>
+            </select>
+            <select class="ctrl" id="period-filter">
+                <option value="24">Last 24 h</option>
+                <option value="48">Last 48 h</option>
+                <option value="168">Last 7 days</option>
+                <option value="720">Last 30 days</option>
+            </select>
+            <button class="btn-go" id="refresh-btn"><i class="fa-solid fa-rotate-right"></i> Refresh</button>
+        </div>
+    </div>
+
+    <!-- ── STAT STRIP ────────────────────────────────────────────────── -->
+    <div class="stat-strip">
+        <div class="sc" style="--ac:#ffffff">
+            <span class="sc-ico"><i class="fa-solid fa-eye"></i></span>
+            <div class="sc-lbl">Detections</div>
+            <div class="sc-val" id="s-total">—</div>
+            <div class="sc-sub" id="s-today">— today</div>
+        </div>
+        <div class="sc" style="--ac:#d4d4d8">
+            <span class="sc-ico"><i class="fa-solid fa-user"></i></span>
+            <div class="sc-lbl">Known Persons</div>
+            <div class="sc-val" id="s-persons">—</div>
+            <div class="sc-sub" id="s-reg">— registered</div>
+        </div>
+        <div class="sc" style="--ac:#ef4444">
+            <span class="sc-ico"><i class="fa-solid fa-triangle-exclamation"></i></span>
+            <div class="sc-lbl">Unknown Alerts</div>
+            <div class="sc-val" id="s-unk">—</div>
+            <div class="sc-sub">Unregistered persons</div>
+        </div>
+        <div class="sc" style="--ac:#f59e0b">
+            <span class="sc-ico"><i class="fa-solid fa-chart-line"></i></span>
+            <div class="sc-lbl">Peak Occupancy</div>
+            <div class="sc-val" id="s-peak">—</div>
+            <div class="sc-sub" id="s-peak-t">people at once</div>
+        </div>
+        <div class="sc" style="--ac:#a1a1aa">
+            <span class="sc-ico"><i class="fa-regular fa-clock"></i></span>
+            <div class="sc-lbl">Busiest Hour</div>
+            <div class="sc-val" id="s-hour" style="font-size:18px">—</div>
+            <div class="sc-sub" id="s-hour-s">avg occupancy</div>
+        </div>
+    </div>
+
+    <!-- ── ROW 1: Trend + Top Persons ────────────────────────────────── -->
+    <div class="g2">
+        <div class="cc">
+            <div class="ch">
+                <div>
+                    <div class="ct-label">Occupancy</div>
+                    <div class="ct-name">Trend Over Time</div>
+                </div>
+                <span class="pill pill-live"><i class="fa-solid fa-circle"></i> Live</span>
+            </div>
+            <div class="chart-wrap">
+                <canvas id="trend-c"></canvas>
+                <div class="s-box" id="trend-s"><div class="spin"></div>Loading…</div>
+            </div>
+        </div>
+
+        <div class="cc">
+            <div class="ch">
+                <div>
+                    <div class="ct-label">Detections</div>
+                    <div class="ct-name">Top Persons</div>
+                </div>
+                <span class="pill pill-db">DB</span>
+            </div>
+            <div style="overflow-y:auto;max-height:250px;">
+                <table class="pt">
+                    <thead><tr><th>#</th><th>Name</th><th>Count</th></tr></thead>
+                    <tbody id="top-body">
+                        <tr><td colspan="3"><div class="s-box" style="height:70px">
+                            <div class="spin"></div>Loading…</div></td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── HEATMAP ────────────────────────────────────────────────────── -->
+    <div class="hm-card">
+        <div class="ch">
+            <div>
+                <div class="ct-label">7-Day Activity</div>
+                <div class="ct-name">Hour × Day Heatmap</div>
+            </div>
+            <span class="pill pill-db">7 Days</span>
+        </div>
+        <div id="hm-area">
+            <div class="s-box" style="height:210px" id="hm-s">
+                <div class="spin"></div>Building heatmap…
+            </div>
+        </div>
+        <div class="hm-leg">
+            <span class="hm-leg-txt">None</span>
+            <div class="hm-leg-bar"></div>
+            <span class="hm-leg-txt">High</span>
+        </div>
+    </div>
+
+    <!-- ── ROW 2: Camera Bar + Donut ─────────────────────────────────── -->
+    <div class="g2b">
+        <div class="cc">
+            <div class="ch">
+                <div>
+                    <div class="ct-label">Detection Volume</div>
+                    <div class="ct-name">Per Camera</div>
+                </div>
+                <span class="pill pill-db">DB</span>
+            </div>
+            <div class="chart-wrap short">
+                <canvas id="cam-c"></canvas>
+                <div class="s-box" id="cam-s"><div class="spin"></div>Loading…</div>
+            </div>
+        </div>
+
+        <div class="cc">
+            <div class="ch">
+                <div>
+                    <div class="ct-label">Identity</div>
+                    <div class="ct-name">Known vs Unknown</div>
+                </div>
+                <span class="pill pill-db">DB</span>
+            </div>
+            <div class="chart-wrap short">
+                <canvas id="donut-c"></canvas>
+                <div class="s-box" id="donut-s"><div class="spin"></div>Loading…</div>
+            </div>
+        </div>
+    </div>
+
+</div><!-- /dash -->
+
+<div id="hm-tip"></div>
+
+<script>
+/* ─── constants ────────────────────────────────────────────────────────────── */
+const PRIMARY='#ffffff',RED='#ef4444',BLUE='#d4d4d8',YELLOW='#fcd34d',PURPLE='#a1a1aa';
+const GRID='rgba(255,255,255,0.04)';
+const DAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const TT={backgroundColor:'#171717',borderColor:'#525252',borderWidth:1,
+          titleColor:PRIMARY,bodyColor:'#a1a1aa',padding:10,cornerRadius:3,
+          titleFont:{family:"'Roboto Mono',monospace",size:9},
+          bodyFont:{family:"'Roboto Mono',monospace",size:11}};
+Chart.defaults.color='#a1a1aa';Chart.defaults.borderColor=GRID;
+
+let cTrend=null,cCam=null,cDonut=null;
+
+/* ─── helpers ──────────────────────────────────────────────────────────────── */
+const $=id=>document.getElementById(id);
+const show=id=>{const e=$(id);if(e)e.style.display='flex';};
+const hide=id=>{const e=$(id);if(e)e.style.display='none';};
+const txt=(id,v)=>{const e=$(id);if(e)e.textContent=v;};
+const fmt=n=>n==null?'—':n>=1e6?(n/1e6).toFixed(1)+'M':n>=1000?(n/1000).toFixed(1)+'k':String(n);
+const hrLbl=h=>h===0?'12AM':h<12?`${h}AM`:h===12?'12PM':`${h-12}PM`;
+
+function filters(){
+    return{cam:$('cam-filter').value,hours:parseInt($('period-filter').value,10)};
+}
+async function api(url){
+    const r=await fetch(url);if(!r.ok)throw new Error(r.status);return r.json();
+}
+
+/* animated counter */
+function countUp(el,target,ms=900){
+    if(!el)return;const n=parseFloat(target);
+    if(isNaN(n)){el.textContent=target;return;}
+    const t0=Date.now();
+    const tick=()=>{
+        const p=Math.min((Date.now()-t0)/ms,1);
+        const e=1-Math.pow(1-p,3);
+        el.textContent=n<10?(n*e).toFixed(1):Math.round(n*e);
+        if(p<1)requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+}
+
+/* ─── camera dropdown ──────────────────────────────────────────────────────── */
+async function loadCams(){
+    try{
+        const cams=await api('/api/cameras');
+        const sel=$('cam-filter');
+        cams.forEach(c=>{const o=document.createElement('option');o.value=o.textContent=c;sel.appendChild(o);});
+    }catch(e){}
+}
+
+/* ─── stat cards ───────────────────────────────────────────────────────────── */
+async function loadStats(){
+    const{cam,hours}=filters();
+    const p=new URLSearchParams({hours});if(cam)p.set('camera_id',cam);
+    try{
+        const d=await api(`/api/analytics/summary?${p}`);
+        countUp($('s-total'),  d.total_detections??0);
+        countUp($('s-persons'),d.unique_persons??0);
+        countUp($('s-unk'),    d.unknown_detections??0);
+        countUp($('s-peak'),   d.peak_occupancy??0);
+        txt('s-today',`${d.today_detections??0} today`);
+        txt('s-reg',  `${d.registered_persons??0} registered`);
+        if(d.peak_time){
+            const pt=new Date(d.peak_time);
+            txt('s-peak-t',pt.toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}));
+        }
+        if(d.busiest_hour!=null){
+            txt('s-hour',   hrLbl(d.busiest_hour));
+            txt('s-hour-s', `avg ${(d.busiest_avg??0).toFixed(1)} people`);
+        }
+    }catch(e){console.warn('stats',e);}
+}
+
+/* ─── trend chart ──────────────────────────────────────────────────────────── */
+async function loadTrend(){
+    const{cam,hours}=filters();
+    const p=new URLSearchParams({hours});if(cam)p.set('camera_id',cam);
+    show('trend-s');
+    try{
+        const data=await api(`/api/analytics/occupancy_trend?${p}`);
+        hide('trend-s');
+        if(!data.length){$('trend-s').innerHTML='No occupancy data yet.';show('trend-s');return;}
+
+        const labels=data.map(r=>{
+            const d=new Date(r.hour);
+            return d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+        });
+        const vals=data.map(r=>parseFloat(r.avg_count??0));
+
+        if(cTrend){cTrend.destroy();cTrend=null;}
+        const ctx=$('trend-c').getContext('2d');
+        const g=ctx.createLinearGradient(0,0,0,220);
+        g.addColorStop(0,'rgba(255,255,255,0.1)');g.addColorStop(1,'rgba(255,255,255,0)');
+
+        cTrend=new Chart(ctx,{
+            type:'line',
+            data:{labels,datasets:[{
+                data:vals,borderColor:PRIMARY,borderWidth:1.5,
+                backgroundColor:g,tension:0.4,fill:true,
+                pointRadius:data.length>72?0:2.5,
+                pointBackgroundColor:PRIMARY,pointBorderColor:'#000000',pointBorderWidth:1,
+            }]},
+            options:{
+                responsive:true,maintainAspectRatio:false,
+                animation:{duration:800,easing:'easeOutCubic'},
+                plugins:{legend:{display:false},tooltip:{...TT,callbacks:{label:c=>` ${c.parsed.y.toFixed(1)} people`}}},
+                scales:{
+                    x:{grid:{color:GRID},ticks:{maxTicksLimit:10,maxRotation:0,font:{family:"'Roboto Mono',monospace",size:9}}},
+                    y:{beginAtZero:true,grid:{color:GRID},ticks:{stepSize:1,font:{family:"'Roboto Mono',monospace",size:9},callback:v=>Number.isInteger(v)?v:null}}
+                }
+            }
+        });
+    }catch(e){console.warn('trend',e);hide('trend-s');}
+}
+
+/* ─── heatmap ──────────────────────────────────────────────────────────────── */
+async function loadHeatmap(){
+    const{cam}=filters();
+    const p=new URLSearchParams();if(cam)p.set('camera_id',cam);
+    const area=$('hm-area');
+    area.innerHTML=`<div class="s-box" style="height:210px"><div class="spin"></div>Building heatmap…</div>`;
+    try{
+        const raw=await api(`/api/analytics/heatmap?${p}`);
+        const mat=Array.from({length:7},()=>new Array(24).fill(0));
+        let mx=0;
+        raw.forEach(r=>{const v=parseFloat(r.avg_count??0);mat[r.dow][r.hour]=v;if(v>mx)mx=v;});
+
+        if(mx===0){
+            area.innerHTML='<p style="color:#1e1e38;padding:20px;font-family:\'Roboto Mono\',monospace;font-size:12px;">No occupancy data yet — connect cameras and let them run.</p>';
+            return;
+        }
+
+        const wrap=document.createElement('div');wrap.className='hm-grid';
+
+        // corner + hour labels
+        wrap.appendChild(Object.assign(document.createElement('div'),{className:'hm-corner'}));
+        for(let h=0;h<24;h++){
+            const l=document.createElement('div');l.className='hm-hl';
+            l.textContent=h%6===0?(h===0?'12a':h<12?`${h}a`:h===12?'12p':`${h-12}p`):'';
+            wrap.appendChild(l);
+        }
+
+        // day rows
+        for(let d=0;d<7;d++){
+            const dl=document.createElement('div');dl.className='hm-dl';dl.textContent=DAYS[d];
+            wrap.appendChild(dl);
+            for(let h=0;h<24;h++){
+                const v=mat[d][h];const t=mx>0?v/mx:0;
+                const cell=document.createElement('div');cell.className='hm-cell';
+                cell.style.background=heatClr(t);
+
+                const tip=$('hm-tip');
+                cell.addEventListener('mouseenter',()=>{
+                    tip.innerHTML=`${DAYS[d]} &nbsp;${hrLbl(h)} → <span>${v.toFixed(1)} avg</span>`;
+                    tip.style.display='block';
+                });
+                cell.addEventListener('mousemove',e=>{
+                    tip.style.left=(e.clientX+16)+'px';tip.style.top=(e.clientY-34)+'px';
+                });
+                cell.addEventListener('mouseleave',()=>{tip.style.display='none';});
+                wrap.appendChild(cell);
+            }
+        }
+
+        const scroll=document.createElement('div');scroll.className='hm-scroll';scroll.appendChild(wrap);
+        area.innerHTML='';area.appendChild(scroll);
+    }catch(e){
+        console.warn('heatmap',e);
+        area.innerHTML='<p style="color:#1e1e38;padding:20px;font-family:\'Roboto Mono\',monospace;font-size:12px;">Failed to load heatmap.</p>';
+    }
+}
+
+function heatClr(t){
+    if(t<=0)return '#171717';
+    if(t<0.12)return `rgba(255,255,255,${(0.06+t*0.5).toFixed(2)})`;
+    const a=0.2+t*0.8;
+    return `rgba(255,255,255,${a.toFixed(2)})`;
+}
+
+/* ─── top persons ──────────────────────────────────────────────────────────── */
+async function loadTop(){
+    const{cam,hours}=filters();
+    const p=new URLSearchParams({hours,limit:8});if(cam)p.set('camera_id',cam);
+    const tbody=$('top-body');
+    try{
+        const data=await api(`/api/analytics/top_persons?${p}`);
+        if(!data.length){
+            tbody.innerHTML='<tr><td colspan="3" style="color:#1e1e38;padding:14px;font-family:\'Roboto Mono\',monospace;font-size:11px;">No detections yet.</td></tr>';
+            return;
+        }
+        const maxC=data[0]?.count??1;
+        tbody.innerHTML=data.map((r,i)=>{
+            const rc=i===0?'rk1':i===1?'rk2':i===2?'rk3':'';
+            return`<tr>
+                <td><span class="rk ${rc}">${i+1}</span></td>
+                <td>
+                    <div class="pname">${r.name??'Unknown'}</div>
+                    <div class="pcam">${r.top_camera??'—'}</div>
+                </td>
+                <td>
+                    <div class="bar-r">
+                        <div class="bar-t"><div class="bar-f" style="width:${Math.round(r.count/maxC*100)}%"></div></div>
+                        <span class="bar-n">${r.count}</span>
+                    </div>
+                </td>
+            </tr>`;
+        }).join('');
+    }catch(e){console.warn('top',e);}
+}
+
+/* ─── camera bar chart ─────────────────────────────────────────────────────── */
+async function loadCamChart(){
+    const{hours}=filters();
+    show('cam-s');
+    try{
+        const data=await api(`/api/analytics/per_camera?${hours}`);
+        hide('cam-s');
+        if(!data.length){$('cam-s').textContent='No camera data.';show('cam-s');return;}
+        const pal=[PRIMARY,'#a1a1aa','#d4d4d8','#71717a','#52525b','#3f3f46','#27272a','#18181b'];
+        if(cCam){cCam.destroy();cCam=null;}
+        cCam=new Chart($('cam-c').getContext('2d'),{
+            type:'bar',
+            data:{
+                labels:data.map(d=>d.camera_id),
+                datasets:[{
+                    data:data.map(d=>d.count),
+                    backgroundColor:data.map((_,i)=>pal[i%pal.length]+'2e'),
+                    borderColor:data.map((_,i)=>pal[i%pal.length]),
+                    borderWidth:1,borderRadius:3,
+                }]
+            },
+            options:{
+                responsive:true,maintainAspectRatio:false,
+                animation:{duration:700,easing:'easeOutCubic'},
+                plugins:{legend:{display:false},tooltip:{...TT,callbacks:{label:c=>` ${c.parsed.y} detections`}}},
+                scales:{
+                    x:{grid:{display:false},ticks:{font:{family:"'Roboto Mono',monospace",size:9}}},
+                    y:{beginAtZero:true,grid:{color:GRID},ticks:{stepSize:1,font:{family:"'Roboto Mono',monospace",size:9}}}
+                }
+            }
+        });
+    }catch(e){console.warn('cam chart',e);hide('cam-s');}
+}
+
+/* ─── known vs unknown donut ───────────────────────────────────────────────── */
+async function loadDonut(){
+    const{cam,hours}=filters();
+    const p=new URLSearchParams({hours});if(cam)p.set('camera_id',cam);
+    show('donut-s');
+    try{
+        const d=await api(`/api/analytics/identity_breakdown?${p}`);
+        hide('donut-s');
+        const kn=d.known??0,un=d.unknown??0,tot=kn+un;
+        if(!tot){$('donut-s').textContent='No detections yet.';show('donut-s');return;}
+
+        if(cDonut){cDonut.destroy();cDonut=null;}
+        cDonut=new Chart($('donut-c').getContext('2d'),{
+            type:'doughnut',
+            data:{
+                labels:['Known','Unknown'],
+                datasets:[{
+                    data:[kn,un],
+                    backgroundColor:[PRIMARY+'40',RED+'40'],
+                    borderColor:[PRIMARY,RED],
+                    borderWidth:1.5,hoverOffset:5,
+                }]
+            },
+            options:{
+                responsive:true,maintainAspectRatio:false,
+                animation:{duration:700,easing:'easeOutCubic'},
+                cutout:'72%',
+                plugins:{
+                    legend:{position:'bottom',labels:{color:'#334',
+                        font:{family:"'Roboto Mono',monospace",size:9},
+                        usePointStyle:true,pointStyleWidth:6,padding:12}},
+                    tooltip:{...TT,callbacks:{label:c=>` ${c.parsed}  (${((c.parsed/tot)*100).toFixed(1)}%)`}}
+                }
+            },
+            plugins:[{
+                id:'cl',
+                afterDraw(ch){
+                    const{ctx,chartArea:{top,bottom,left,right}}=ch;
+                    const cx=(left+right)/2,cy=(top+bottom)/2;
+                    ctx.save();
+                    ctx.font="bold 20px Orbitron,monospace";
+                    ctx.fillStyle='#ccd';ctx.textAlign='center';ctx.textBaseline='middle';
+                    ctx.fillText(fmt(tot),cx,cy-8);
+                    ctx.font="9px 'Roboto Mono',monospace";
+                    ctx.fillStyle='#223';ctx.fillText('TOTAL',cx,cy+11);
+                    ctx.restore();
+                }
+            }]
+        });
+    }catch(e){console.warn('donut',e);hide('donut-s');}
+}
+
+/* ─── load all ─────────────────────────────────────────────────────────────── */
+async function loadAll(){
+    const btn=$('refresh-btn');
+    btn.disabled=true;btn.textContent='…';
+    await Promise.allSettled([
+        loadStats(),loadTrend(),loadHeatmap(),
+        loadTop(),loadCamChart(),loadDonut(),
+    ]);
+    btn.disabled=false;btn.textContent='↻ Refresh';
+}
+
+document.addEventListener('DOMContentLoaded',async()=>{
+    await loadCams();
+    await loadAll();
+    $('refresh-btn').addEventListener('click',loadAll);
+    $('cam-filter').addEventListener('change',loadAll);
+    $('period-filter').addEventListener('change',loadAll);
+    setInterval(loadAll,60_000);
+});
+</script>
+</body>
+</html>

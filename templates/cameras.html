@@ -6,6 +6,7 @@
     <title>AI Vigilance - Cameras</title>
     <link rel="stylesheet" href="/static/style.css">
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Roboto:wght@300;400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
     <header>
@@ -16,22 +17,25 @@
             <a href="/cameras" class="active">Cameras</a>
             <a href="/search">Search</a>
             <a href="/recordings_page">Recordings</a>
+            <a href="/analytics">Analytics</a>
         </nav>
     </header>
     <main>
         <div class="sidebar" style="width:100%; max-width:600px;">
             <section class="add-camera">
-                <h2>Add Camera</h2>
-                <form id="camera-form">
+                <div class="section-title">
+                    <h2>Add Camera</h2>
+                </div>
+                <form id="camera-form" style="display:flex; flex-direction:column; gap:0.5rem;">
                     <input type="text" name="camera_id" placeholder="Camera Name (e.g. Cam1)" required>
-                    <select name="camera_type" id="camera-type" style="width: 100%; margin-bottom: 1rem; padding: 10px; border-radius: 5px; border: none; background: #222; color: #fff;">
+                    <select name="camera_type" id="camera-type" style="margin-bottom:0;">
                         <option value="webcam">Local Webcam</option>
                         <option value="rtsp">RTSP Stream</option>
                         <option value="ipwebcam">IP Webcam App (Android)</option>
                         <option value="droidcam">DroidCam</option>
                     </select>
-                    <input type="text" name="source" id="camera-source" placeholder="Camera Index (e.g. 0)" required>
-                    <button type="submit">Connect</button>
+                    <input type="text" name="source" id="camera-source" placeholder="Camera Index (e.g. 0)" style="margin-bottom:1rem;" required>
+                    <button type="submit" class="btn-primary"><i class="fa-solid fa-plug"></i> Connect</button>
                 </form>
             </section>
         </div>
@@ -40,37 +44,41 @@
                 <h2 style="margin:0;">Active Cameras</h2>
             </div>
             <ul id="active-cameras-list" style="list-style: none; padding: 0;">
-                <li style="color:#666;">Loading cameras...</li>
+                <li style="color:var(--text-muted);">Loading cameras...</li>
             </ul>
             <div style="margin-top:2rem;">
-                <h2 style="margin:0 0 10px 0;">Occupancy Log</h2>
+                <div class="section-title">
+                    <h2>Occupancy Log</h2>
+                </div>
                 <div class="filter-controls">
-                    <select id="occ-camera-select" style="padding:10px; background:#222; color:#fff; border:1px solid #333; border-radius:5px;">
+                    <select id="occ-camera-select" style="min-width: 200px; margin-bottom: 0;">
                         <option value="">All Cameras</option>
                     </select>
-                    <label style="color:#aaa; font-size:0.85rem;">From</label>
-                    <input type="datetime-local" id="occ-start">
-                    <label style="color:#aaa; font-size:0.85rem;">To</label>
-                    <input type="datetime-local" id="occ-end">
+                    <label style="color:var(--text-muted); font-size:0.85rem;">From</label>
+                    <input type="datetime-local" id="occ-start" style="margin-bottom: 0;">
+                    <label style="color:var(--text-muted); font-size:0.85rem;">To</label>
+                    <input type="datetime-local" id="occ-end" style="margin-bottom: 0;">
                     <button id="occ-load-btn" class="btn-secondary">Load</button>
+                    <button id="occ-delete-all-btn" class="btn-danger">Delete All</button>
                 </div>
-                <div id="occ-results" style="overflow:auto;">
-                    <table style="width:100%; border-collapse:collapse;">
-                        <thead>
-                            <tr style="text-align:left; border-bottom:1px solid #333;">
-                                <th style="padding:8px;">Time</th>
-                                <th style="padding:8px;">Camera</th>
-                                <th style="padding:8px;">Count</th>
+                <div id="occ-results" style="overflow:auto; border-radius: 8px; border: 1px solid var(--card-border); background: var(--card-bg);">
+                    <table style="width:100%; border-collapse:collapse; text-align: left;">
+                        <thead style="background: #000000; border-bottom: 1px solid var(--card-border);">
+                            <tr>
+                                <th style="padding:1rem; color:var(--text-muted); font-size: 0.85rem; font-weight: 600; text-transform:uppercase;">Time</th>
+                                <th style="padding:1rem; color:var(--text-muted); font-size: 0.85rem; font-weight: 600; text-transform:uppercase;">Camera</th>
+                                <th style="padding:1rem; color:var(--text-muted); font-size: 0.85rem; font-weight: 600; text-transform:uppercase;">Count</th>
+                                <th style="padding:1rem; width:80px; color:var(--text-muted); font-size: 0.85rem; font-weight: 600; text-transform:uppercase;">Action</th>
                             </tr>
                         </thead>
                         <tbody id="occ-tbody">
-                            <tr><td style="padding:8px;color:#666;" colspan="3">No data</td></tr>
+                            <tr><td style="padding:1rem; color:var(--text-muted);" colspan="4">No data</td></tr>
                         </tbody>
                     </table>
                 </div>
             </div>
         </div>
     </main>
-    <script src="/static/script.js"></script>
+    <script src="/static/script.js?v=2"></script>
 </body>
 </html>

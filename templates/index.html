@@ -13,6 +13,7 @@
     <title>AI Vigilance - Smart Multi-Camera Dashboard | Real-Time Security</title>
     <link rel="stylesheet" href="/static/style.css">
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Roboto:wght@300;400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
     <header>
@@ -23,6 +24,7 @@
             <a href="/cameras">Cameras</a>
             <a href="/search">Search</a>
             <a href="/recordings_page">Recordings</a>
+            <a href="/analytics">Analytics</a>
         </nav>
     </header>
 
@@ -32,9 +34,19 @@
                 <h2 style="margin:0;">Live Feeds</h2>
                 <div>
                     {% if total_pages > 1 %}
-                        <a href="/?page={{ page - 1 }}&per_page={{ per_page }}" style="margin-right:10px; {{ 'pointer-events:none;opacity:0.5;' if page <= 1 else '' }}">◀ Prev</a>
-                        <span style="color:#aaa;">Page {{ page }} of {{ total_pages }}</span>
-                        <a href="/?page={{ page + 1 }}&per_page={{ per_page }}" style="margin-left:10px; {{ 'pointer-events:none;opacity:0.5;' if page >= total_pages else '' }}">Next ▶</a>
+                        {% if page <= 1 %}
+                        <a href="#" class="btn-secondary btn-small" style="margin-right:10px; pointer-events:none; opacity:0.5; text-decoration:none;"><i class="fa-solid fa-chevron-left"></i> Prev</a>
+                        {% else %}
+                        <a href="/?page={{ page - 1 }}&per_page={{ per_page }}" class="btn-secondary btn-small" style="margin-right:10px; text-decoration:none;"><i class="fa-solid fa-chevron-left"></i> Prev</a>
+                        {% endif %}
+                        
+                        <span style="color:var(--text-muted); font-size:0.9rem; margin: 0 10px;">Page {{ page }} of {{ total_pages }}</span>
+                        
+                        {% if page >= total_pages %}
+                        <a href="#" class="btn-secondary btn-small" style="margin-left:10px; pointer-events:none; opacity:0.5; text-decoration:none;">Next <i class="fa-solid fa-chevron-right"></i></a>
+                        {% else %}
+                        <a href="/?page={{ page + 1 }}&per_page={{ per_page }}" class="btn-secondary btn-small" style="margin-left:10px; text-decoration:none;">Next <i class="fa-solid fa-chevron-right"></i></a>
+                        {% endif %}
                     {% endif %}
                 </div>
             </div>
@@ -45,9 +57,8 @@
                         <h3>{{ cam }}</h3>
                         <div style="display: flex; gap: 10px; align-items: center;">
                             <span class="live-indicator">LIVE</span>
-                            <button data-rec-cam="{{ cam }}" onclick="toggleRecording('{{ cam }}', this)" 
-                                    style="background: #ff3333; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-weight: bold;">
-                                ⏺ Record
+                            <button data-rec-cam="{{ cam }}" onclick="toggleRecording('{{ cam }}', this)" class="btn-danger btn-small">
+                                <i class="fa-solid fa-circle"></i> Record
                             </button>
                         </div>
                     </div>

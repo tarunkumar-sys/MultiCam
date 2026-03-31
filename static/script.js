@@ -84,20 +84,27 @@ document.addEventListener('DOMContentLoaded', () => {
     const cameraList = document.getElementById('active-cameras-list');
     if (cameraList) {
         const fetchCameras = async () => {
-            const res = await fetch('/api/cameras');
+            const res = await fetch('/api/cameras_info');
             const cams = await res.json();
             cameraList.innerHTML = cams.map(cam => `
                 <li style="display:flex;justify-content:space-between;align-items:center;
                            background:#222;padding:10px;margin-bottom:5px;border-radius:5px;">
-                    <span>${cam}</span>
-                    <button onclick="deleteCamera('${cam}')"
-                        style="background:#ff3333;color:white;border:none;padding:5px 10px;
-                               cursor:pointer;border-radius:3px;width:auto;margin:0;">Remove</button>
+                    <span>${cam.id} <small style="color:${cam.status==='active'?'#2ecc71':'#e74c3c'}">(${cam.status})</small></span>
+                    <div>
+                        <button onclick="toggleCameraStatus('${cam.id}', this)"
+                            style="background:${cam.status === 'active' ? '#f39c12' : '#2ecc71'};color:white;border:none;padding:5px 10px;
+                                   cursor:pointer;border-radius:3px;width:auto;margin:0;margin-right:5px;">
+                            ${cam.status === 'active' ? 'Stop' : 'Start'}
+                        </button>
+                        <button onclick="deleteCamera('${cam.id}')"
+                            style="background:#ff3333;color:white;border:none;padding:5px 10px;
+                                   cursor:pointer;border-radius:3px;width:auto;margin:0;">Remove</button>
+                    </div>
                 </li>`).join('');
             const occSelect = document.getElementById('occ-camera-select');
             if (occSelect) {
                 const current = occSelect.value;
-                occSelect.innerHTML = '<option value=\"\">All Cameras</option>' + cams.map(c => `<option value="${c}">${c}</option>`).join('');
+                occSelect.innerHTML = '<option value=\"\">All Cameras</option>' + cams.map(c => `<option value="${c.id}">${c.id}</option>`).join('');
                 if (current) occSelect.value = current;
             }
         };
@@ -108,7 +115,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const occBtn = document.getElementById('occ-load-btn');
     const occTbody = document.getElementById('occ-tbody');
     if (occBtn && occTbody) {
-        const loadOcc = async () => {
+        const getOccParams = () => {
             const cam = document.getElementById('occ-camera-select')?.value || '';
             const start = document.getElementById('occ-start')?.value || '';
             const end = document.getElementById('occ-end')?.value || '';
@@ -116,10 +123,15 @@ document.addEventListener('DOMContentLoaded', () => {
             if (cam) params.append('camera_id', cam);
             if (start) params.append('start_time', start);
             if (end) params.append('end_time', end);
+            return params;
+        };
+
+        const loadOcc = async () => {
+            const params = getOccParams();
             const res = await fetch(`/api/occupancy?${params.toString()}`);
             const rows = await res.json();
             if (!rows || rows.length === 0) {
-                occTbody.innerHTML = '<tr><td style="padding:8px;color:#666;" colspan="3">No data</td></tr>';
+                occTbody.innerHTML = '<tr><td style="padding:8px;color:#666;" colspan="4">No data</td></tr>';
                 return;
             }
             occTbody.innerHTML = rows.map(r => `
@@ -127,11 +139,31 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td style="padding:8px;">${new Date(r.timestamp).toLocaleString()}</td>
                     <td style="padding:8px;">${r.camera_id}</td>
                     <td style="padding:8px;">${r.count}</td>
+                    <td style="padding:8px;">
+                        <button onclick="deleteOccLog(${r.id})" style="background:#ff3333;color:white;border:none;padding:2px 8px;border-radius:3px;cursor:pointer;">Clear</button>
+                    </td>
                 </tr>
             `).join('');
         };
         occBtn.addEventListener('click', loadOcc);
         loadOcc();
+
+        const occDelAllBtn = document.getElementById('occ-delete-all-btn');
+        if (occDelAllBtn) {
+            occDelAllBtn.addEventListener('click', async () => {
+                if (!confirm("Are you sure you want to delete all filtered occupancy logs?")) return;
+                try {
+                    const params = getOccParams();
+                    const res = await fetch(`/api/occupancy_all?${params.toString()}`, { method: 'DELETE' });
+                    const data = await res.json();
+                    if (data.status === 'success') {
+                        loadOcc();
+                    }
+                } catch {
+                    alert("Network error.");
+                }
+            });
+        }
     }
     // -------------------------------------------------------------------------
     // 5. Search Page — Active search mission + history grid
@@ -289,6 +321,37 @@ window.deleteCamera = async (camId) => {
     fd.append('camera_id', camId);
     await fetch('/delete_camera', { method: 'POST', body: fd });
     location.reload();
+};
+
+window.toggleCameraStatus = async (camId, btn) => {
+    btn.disabled = true;
+    const fd = new FormData();
+    fd.append('camera_id', camId);
+    try {
+        const res = await fetch('/toggle_camera', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (data.status === 'success') {
+            const isActive = data.active;
+            btn.style.background = isActive ? '#f39c12' : '#2ecc71';
+            btn.innerHTML = isActive ? 'Stop' : 'Start';
+        }
+    } catch {
+        alert("Failed to toggle camera.");
+    }
+    btn.disabled = false;
+};
+
+window.deleteOccLog = async (logId) => {
+    if (!confirm("Delete this log entry?")) return;
+    try {
+        const res = await fetch(`/api/occupancy/${logId}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.status === 'success') {
+            document.getElementById('occ-load-btn')?.click();
+        }
+    } catch {
+        alert("Network error.");
+    }
 };
 
 window.toggleRecording = async (camId, btn) => {

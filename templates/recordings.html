@@ -1,31 +1,54 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Vigilance - Recordings</title>
     <link rel="stylesheet" href="/static/style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Roboto:wght@300;400;700&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Roboto:wght@300;400;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        * { box-sizing: border-box; }
-        .search-controls { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 20px;}
-        .search-controls input[type=text] { flex: 1; min-width: 200px; padding: 10px; border-radius: 5px; border: 1px solid #333; background: #222; color: white;}
-        .filter-controls { display: flex; gap: 10px; align-items: center; margin-bottom: 20px;}
-        .filter-controls input { padding: 10px; border-radius: 5px; border: 1px solid #333; background: #222; color: white;}
-        .btn-primary { background: #00bcd4; color: black; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; transition: all 0.2s; }
-        .btn-primary:hover { background: #00acc1; }
-        .btn-secondary { background: #444; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; transition: all 0.2s; }
-        .btn-secondary:hover { background: #555; }
-        .btn-danger { background: #ff3333; color: white; padding: 8px 16px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; transition: all 0.2s; }
-        .btn-danger:hover { background: #ff4444; }
-        .btn-small { padding: 6px 12px; font-size: 0.8rem; border-radius: 4px; border: none; cursor: pointer; }
-        
-        .recording-card { background: #1a1a2e; border: 1px solid #333; border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; transition: transform 0.2s, border-color 0.2s; }
-        .recording-card:hover { transform: translateY(-3px); border-color: #00bcd4; }
-        .recording-thumbnail { 
-            width: 100%; 
-            height: 180px; 
-            background: #0a0a1a;
+        * {
+            box-sizing: border-box;
+        }
+
+        .search-controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .filter-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .recording-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 8px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.2s, border-color 0.2s;
+        }
+
+        .recording-card:hover {
+            transform: translateY(-3px);
+            border-color: #525252;
+        }
+
+        .recording-thumbnail {
+            width: 100%;
+            height: 180px;
+            background: #000000;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -33,11 +56,13 @@
             position: relative;
             overflow: hidden;
         }
-        .recording-thumbnail video { 
-            width: 100%; 
-            height: 100%; 
+
+        .recording-thumbnail video {
+            width: 100%;
+            height: 100%;
             object-fit: cover;
         }
+
         .play-overlay {
             position: absolute;
             top: 50%;
@@ -45,7 +70,7 @@
             transform: translate(-50%, -50%);
             width: 60px;
             height: 60px;
-            background: rgba(0, 188, 212, 0.9);
+            background: rgba(255, 255, 255, 0.9);
             border-radius: 50%;
             display: flex;
             align-items: center;
@@ -55,16 +80,40 @@
             opacity: 0.9;
             transition: all 0.2s;
         }
+
         .recording-thumbnail:hover .play-overlay {
             transform: translate(-50%, -50%) scale(1.1);
             opacity: 1;
         }
-        .recording-info { padding: 15px; }
-        .recording-info h4 { margin: 0 0 10px 0; color: #00bcd4; font-size: 1.1rem; }
-        .recording-info p { margin: 5px 0; color: #aaa; font-size: 0.9rem; }
-        .recording-actions { display: flex; gap: 8px; margin-top: 10px; }
-        .results-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; }
-        
+
+        .recording-info {
+            padding: 15px;
+        }
+
+        .recording-info h4 {
+            margin: 0 0 10px 0;
+            color: var(--text);
+            font-size: 1.1rem;
+        }
+
+        .recording-info p {
+            margin: 5px 0;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .recording-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 20px;
+        }
+
         /* Video Modal */
         .video-modal {
             display: none;
@@ -73,14 +122,19 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0,0,0,0.95);
+            background: rgba(0, 0, 0, 0.95);
             z-index: 1000;
             justify-content: center;
             align-items: center;
         }
-        .video-modal.active { display: flex; }
+
+        .video-modal.active {
+            display: flex;
+        }
+
         .video-modal-content {
-            background: #1a1a2e;
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
             border-radius: 10px;
             padding: 20px;
             max-width: 90%;
@@ -88,16 +142,18 @@
             position: relative;
             width: 900px;
         }
+
         .video-modal video {
             width: 100%;
             max-height: 70vh;
             border-radius: 8px;
         }
+
         .modal-close {
             position: absolute;
             top: -40px;
             right: 0;
-            background: #ff3333;
+            background: var(--danger);
             color: white;
             border: none;
             padding: 10px 20px;
@@ -105,16 +161,27 @@
             cursor: pointer;
             font-weight: bold;
         }
+
         .modal-info {
             margin-top: 15px;
             padding: 15px;
-            background: #252540;
+            background: #171717;
+            border: 1px solid var(--card-border);
             border-radius: 8px;
         }
-        .modal-info h4 { margin: 0 0 10px 0; color: #00bcd4; }
-        .modal-info p { margin: 5px 0; color: #aaa; }
+
+        .modal-info h4 {
+            margin: 0 0 10px 0;
+            color: var(--text);
+        }
+
+        .modal-info p {
+            margin: 5px 0;
+            color: var(--text-muted);
+        }
     </style>
 </head>
+
 <body>
     <header>
         <div class="logo">AI VIGILANCE</div>
@@ -124,6 +191,7 @@
             <a href="/cameras">Cameras</a>
             <a href="/search">Search</a>
             <a href="/recordings_page" class="active">Recordings</a>
+            <a href="/analytics">Analytics</a>
         </nav>
     </header>
 
@@ -134,19 +202,19 @@
             </div>
             <div class="search-controls">
                 <input type="text" id="camera-search" placeholder="Filter by Camera ID (e.g. Webcam)">
-                <button id="search-recordings-btn" class="btn-primary">🔍 Load Recordings</button>
+                <button id="search-recordings-btn" class="btn-primary"><i class="fa-solid fa-search"></i> Load Recordings</button>
             </div>
             <div class="filter-controls">
-                <label style="color:#aaa; font-size:0.85rem;">From</label>
-                <input type="datetime-local" id="rec-start-time">
-                <label style="color:#aaa; font-size:0.85rem;">To</label>
-                <input type="datetime-local" id="rec-end-time">
+                <label style="color:var(--text-muted); font-size:0.85rem;">From</label>
+                <input type="datetime-local" id="rec-start-time" style="width: auto; margin-bottom: 0;">
+                <label style="color:var(--text-muted); font-size:0.85rem;">To</label>
+                <input type="datetime-local" id="rec-end-time" style="width: auto; margin-bottom: 0;">
             </div>
         </section>
 
         <section class="results">
             <div class="results-grid" id="recordings-grid">
-                <p style="color:#666;">Click "Load Recordings" to view saved video feeds.</p>
+                <p style="color:var(--text-muted);">Click "Load Recordings" to view saved video feeds.</p>
             </div>
         </section>
     </main>
@@ -191,9 +259,9 @@
                     const res = await fetch(`/api/recordings?${params}`);
                     const data = await res.json();
                     currentRecordings = data;
-                    
+
                     if (!data || data.length === 0) {
-                        grid.innerHTML = '<p style="color:#666;padding:1rem;">No recordings found.</p>';
+                        grid.innerHTML = '<p style="color:var(--text-muted);padding:1rem;">No recordings found.</p>';
                     } else {
                         grid.innerHTML = data.map(r => `
                             <div class="recording-card">
@@ -201,25 +269,25 @@
                                     <video preload="metadata" muted>
                                         <source src="/${r.file_path}#t=0.1" type="video/webm">
                                     </video>
-                                    <div class="play-overlay">▶</div>
+                                    <div class="play-overlay"><i class="fa-solid fa-play"></i></div>
                                 </div>
                                 <div class="recording-info">
-                                    <h4>🎥 ${r.camera_id}</h4>
+                                    <h4><i class="fa-solid fa-video"></i> ${r.camera_id}</h4>
                                     <p><b>Start:</b> ${new Date(r.start_time).toLocaleString()}</p>
                                     <p><b>End:</b> ${r.end_time ? new Date(r.end_time).toLocaleString() : 'Ongoing...'}</p>
                                     <div class="recording-actions">
-                                        <button class="btn-small btn-primary" onclick="openVideoModal(${r.id})">▶ Play</button>
-                                        <button class="btn-small btn-danger" onclick="deleteRecording(${r.id})">🗑 Delete</button>
+                                        <button class="btn-small btn-primary" onclick="openVideoModal(${r.id})"><i class="fa-solid fa-play"></i> Play</button>
+                                        <button class="btn-small btn-danger" onclick="deleteRecording(${r.id})"><i class="fa-solid fa-trash"></i> Delete</button>
                                     </div>
                                 </div>
                             </div>
                         `).join('');
                     }
                 } catch (e) {
-                    grid.innerHTML = '<p style="color:#ff3333;padding:1rem;">Error loading recordings.</p>';
+                    grid.innerHTML = '<p style="color:var(--danger);padding:1rem;">Error loading recordings.</p>';
                 }
 
-                searchBtn.innerText = '🔍 Load Recordings';
+                searchBtn.innerHTML = '<i class="fa-solid fa-search"></i> Load Recordings';
                 searchBtn.disabled = false;
             };
 
@@ -230,16 +298,16 @@
         window.openVideoModal = (id) => {
             const recording = currentRecordings.find(r => r.id === id);
             if (!recording) return;
-            
+
             const modal = document.getElementById('video-modal');
             const video = document.getElementById('modal-video');
             const cameraEl = document.getElementById('modal-camera');
             const timeEl = document.getElementById('modal-time');
-            
+
             video.src = '/' + recording.file_path;
             cameraEl.textContent = 'Camera: ' + recording.camera_id;
             timeEl.textContent = 'Recorded: ' + new Date(recording.start_time).toLocaleString();
-            
+
             modal.classList.add('active');
             video.play();
         };
@@ -283,4 +351,5 @@
     </script>
     <script src="/static/script.js"></script>
 </body>
+
 </html>
