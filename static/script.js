@@ -175,3 +175,59 @@ if (window.location.pathname !== '/login') {
     fetchAlerts();
     alertPollingInterval = setInterval(fetchAlerts, 5000); // Check every 5 seconds
 }
+// ─── Lightbox Logic ──────────────────────────────────────────────────────
+let currentLightboxIndex = -1;
+let lightboxItems = [];
+
+function openLightbox(index, items) {
+    currentLightboxIndex = index;
+    lightboxItems = items;
+    updateLightbox();
+    document.getElementById('lightbox').classList.add('active');
+    document.body.classList.add('modal-open');
+}
+
+function closeLightbox() {
+    document.getElementById('lightbox').classList.remove('active');
+    document.body.classList.remove('modal-open');
+}
+
+function updateLightbox() {
+    const item = lightboxItems[currentLightboxIndex];
+    if (!item) return;
+
+    const fullImg = document.getElementById('lightbox-full-img');
+    const faceImg = document.getElementById('lightbox-face-img');
+    const meta = document.getElementById('lightbox-meta');
+    
+    fullImg.src = '/' + (item.snapshot_path || item.image_path);
+    faceImg.src = '/' + (item.face_path || item.snapshot_path || item.image_path);
+    
+    const date = new Date(item.timestamp + "Z");
+    meta.innerHTML = `
+        <strong>${item.person_name || 'Unknown Person'}</strong>
+        <i class="fa-solid fa-video"></i> ${item.camera_id} &nbsp;&bull;&nbsp; 
+        <i class="fa-regular fa-calendar"></i> ${date.toLocaleDateString()} &nbsp;&bull;&nbsp; 
+        <i class="fa-regular fa-clock"></i> ${date.toLocaleTimeString()}
+    `;
+
+    document.getElementById('lb-prev').disabled = currentLightboxIndex <= 0;
+    document.getElementById('lb-next').disabled = currentLightboxIndex >= lightboxItems.length - 1;
+}
+
+function changeLightbox(delta) {
+    const newIdx = currentLightboxIndex + delta;
+    if (newIdx >= 0 && newIdx < lightboxItems.length) {
+        currentLightboxIndex = newIdx;
+        updateLightbox();
+    }
+}
+
+// Global Keyboard Nav
+document.addEventListener('keydown', (e) => {
+    const lb = document.getElementById('lightbox');
+    if (!lb || !lb.classList.contains('active')) return;
+    if (e.key === 'ArrowLeft') changeLightbox(-1);
+    if (e.key === 'ArrowRight') changeLightbox(1);
+    if (e.key === 'Escape') closeLightbox();
+});

@@ -149,6 +149,7 @@ class DatabaseManager:
     def cleanup_old_logs(self):
         """Delete logs older than 24 hours and their snapshot files."""
         import os
+        import json
         with self.get_connection() as conn:
             cursor = conn.cursor()
             # Get old snapshot paths before deleting
@@ -158,12 +159,51 @@ class DatabaseManager:
             ''')
             old_snaps = cursor.fetchall()
             for (path,) in old_snaps:
-                if path and os.path.exists(path):
+                if not path: continue
+                # Handle dual-path JSON storage
+                to_delete = []
+                if "{" in path and "}" in path: # Quick check if it looks like JSON
                     try:
-                        os.remove(path)
-                    except Exception:
-                        pass
+                        paths = json.loads(path)
+                        to_delete.extend([paths.get("full"), paths.get("face")])
+                    except: to_delete.append(path)
+                else:
+                    to_delete.append(path)
+
+                for file_path in to_delete:
+                    if file_path and os.path.exists(file_path):
+                        try: os.remove(file_path)
+                        except: pass
+
             cursor.execute("DELETE FROM detection_logs WHERE timestamp < datetime('now', '-24 hours')")
+            conn.commit()
+            return cursor.rowcount
+
+    def clear_all_logs(self):
+        """Wipe all detection logs and their snapshot files immediately."""
+        import os
+        import json
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT snapshot_path FROM detection_logs')
+            rows = cursor.fetchall()
+            for (path,) in rows:
+                if not path: continue
+                to_delete = []
+                if "{" in path and "}" in path:
+                    try:
+                        paths = json.loads(path)
+                        to_delete.extend([paths.get("full"), paths.get("face")])
+                    except: to_delete.append(path)
+                else:
+                    to_delete.append(path)
+
+                for file_path in to_delete:
+                    if file_path and os.path.exists(file_path):
+                        try: os.remove(file_path)
+                        except: pass
+
+            cursor.execute("DELETE FROM detection_logs")
             conn.commit()
             return cursor.rowcount
 

@@ -122,6 +122,27 @@
         </div>
     </div>
 
+    <div class="lightbox-modal" id="lightbox">
+        <button class="lightbox-close" onclick="closeLightbox()"><i class="fa-solid fa-xmark"></i></button>
+        <div class="lightbox-content">
+            <div class="lightbox-image-container">
+                <div class="flex-col items-center gap-sm">
+                    <span style="font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:1px;">Full Frame</span>
+                    <img id="lightbox-full-img" class="lightbox-main-img" src="" alt="Full Snapshot">
+                </div>
+                <div class="flex-col items-center gap-sm">
+                    <span style="font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:1px;">Face Detection</span>
+                    <img id="lightbox-face-img" class="lightbox-side-img" src="" alt="Face Crop">
+                </div>
+            </div>
+            <div class="lightbox-meta" id="lightbox-meta"></div>
+        </div>
+        <div class="lightbox-nav">
+            <button id="lb-prev" onclick="changeLightbox(-1)"><i class="fa-solid fa-chevron-left"></i></button>
+            <button id="lb-next" onclick="changeLightbox(1)"><i class="fa-solid fa-chevron-right"></i></button>
+        </div>
+    </div>
+
     <script src="/static/script.js"></script>
     {% block scripts %}{% endblock %}
 </body>

@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+import json
 import os
 import shutil
 import hashlib
@@ -17,7 +18,7 @@ from cameras.camera_manager import CameraManager
 import threading
 import time
 import urllib.parse
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -40,6 +41,24 @@ def sanitize_rtsp_url(url: str) -> str:
         safe_pwd = urllib.parse.quote(pwd)
         return f"rtsp://{user}:{safe_pwd}{url_str[last_at:]}"
     return url_str
+
+def calculate_iou(box1, box2):
+    """box as [x1, y1, x2, y2]"""
+    xA = max(box1[0], box2[0])
+    yA = max(box1[1], box2[1])
+    xB = min(box1[2], box2[2])
+    yB = min(box1[3], box2[3])
+    interArea = max(0, xB - xA) * max(0, yB - yA)
+    box1Area = (box1[2] - box1[0]) * (box1[3] - box1[1])
+    box2Area = (box2[2] - box2[0]) * (box2[3] - box2[1])
+    return interArea / float(box1Area + box2Area - interArea + 1e-6)
+
+def get_person_color(pid: int):
+    import colorsys
+    # Use golden angle for distinct hues
+    hue = (pid * 137.508) % 360
+    r, g, b = colorsys.hsv_to_rgb(hue / 360.0, 0.9, 0.95)
+    return (int(b * 255), int(g * 255), int(r * 255))  # BGR for OpenCV
 
 # ---------------------------------------------------------------------------
 # Setup
@@ -118,6 +137,10 @@ occupancy_last_count: Dict[str, int] = {}
 active_search: Dict[str, Any] = {}
 active_search_lock = threading.Lock()
 
+# camera_id -> list of face embeddings for deduplication
+saved_encodings: Dict[str, List[np.ndarray]] = {}
+saved_encodings_lock = threading.Lock()
+
 # ---------------------------------------------------------------------------
 # Face crop helper
 # ---------------------------------------------------------------------------
@@ -156,306 +179,250 @@ def process_camera(camera_id: str):
     print(f"[process_camera] Thread started for: {camera_id}")
     tracker: Any = ObjectTracker()
     last_frame_id: int = -1
-    frame_count: int = 0
     
-    DETECTION_INTERVAL = 1
-    RECOGNITION_INTERVAL = 30
-    RECOGNITION_CACHE_FRAMES = 60
+    FRAME_INTERVAL = 0.5  # 2 FPS processing
+    RECOGNITION_INTERVAL = 2.0  # Recognition every 2 seconds if person present
+    
+    last_process_time = 0
+    last_recognition_time = 0
+    
+    current_tracks = []
     recognition_cache: Dict[Any, tuple] = {}
     seen_track_ids = set()
-    track_states: Dict[Any, dict] = {}
-    last_detections = []
-    last_detection_frame = 0
-
+    
+    # Cache for tracking recognition results
+    RECOGNITION_CACHE_TTL = 30  # Seconds
+    
     while True:
         frame, frame_id = camera_manager.get_camera_frame_with_id(camera_id)
         if frame is None or frame_id == last_frame_id:
-            time.sleep(0.005)
+            time.sleep(0.01)
             continue
         last_frame_id = frame_id
-        frame_count += 1
+        
+        now = time.time()
+        h, w = frame.shape[:2]
 
-        try:
-            h, w = frame.shape[:2]
-            run_detection = (frame_count % DETECTION_INTERVAL == 0)
-            run_recognition = (frame_count % RECOGNITION_INTERVAL == 0)
-
-            if run_detection:
-                detections = detector.detect(frame)
-                tracks = tracker.update(detections, frame)
-                last_detections = tracks
-                last_detection_frame = frame_count
-                
-                current_ids = set()
-                for t in tracks:
-                    track_id = t["id"]
-                    current_ids.add(track_id)
-                    if track_id not in seen_track_ids:
-                        seen_track_ids.add(track_id)
-                    new_bbox = t["bbox"]
-                    
-                    if track_id in track_states:
-                        old_bbox = track_states[track_id]["bbox"]
-                        velocity = [
-                            new_bbox[0] - old_bbox[0],
-                            new_bbox[1] - old_bbox[1],
-                            new_bbox[2] - old_bbox[2],
-                            new_bbox[3] - old_bbox[3]
-                        ]
-                        track_states[track_id] = {
-                            "bbox": new_bbox, "velocity": velocity,
-                            "last_update": frame_count, "active": True
-                        }
-                    else:
-                        track_states[track_id] = {
-                            "bbox": new_bbox, "velocity": [0, 0, 0, 0],
-                            "last_update": frame_count, "active": True
-                        }
-                
-                for tid in track_states:
-                    if tid not in current_ids:
-                        track_states[tid]["active"] = False
-                
-                stale_ids = [tid for tid, state in track_states.items() 
-                            if not state["active"] and (frame_count - state["last_update"]) > 90]
-                for tid in stale_ids:
-                    del track_states[tid]
-                    recognition_cache.pop(tid, None)
+        # 1. Higher-level Logic: Detection & Tracking at 2 FPS
+        if now - last_process_time >= FRAME_INTERVAL:
+            last_process_time = now
             
-            frames_since_detection = frame_count - last_detection_frame
-            if frames_since_detection > 0:
-                for tid, state in track_states.items():
-                    if state["active"]:
-                        v = state["velocity"]
-                        old_bbox = state["bbox"]
-                        damping = 0.95 ** frames_since_detection
-                        predicted_bbox = [
-                            old_bbox[0] + v[0] * damping,
-                            old_bbox[1] + v[1] * damping,
-                            old_bbox[2] + v[2] * damping,
-                            old_bbox[3] + v[3] * damping
-                        ]
-                        state["predicted_bbox"] = predicted_bbox
-                    else:
-                        state["predicted_bbox"] = state["bbox"]
-            else:
-                for state in track_states.values():
-                    state["predicted_bbox"] = state["bbox"]
+            # Run detection
+            detections = detector.detect(frame)
+            
+            # Run tracking
+            raw_tracks = tracker.update(detections, frame)
+            
+            # 2. Double Box Elimination (Manual NMS after tracking)
+            # Sort by ID (lowest first)
+            sorted_tracks = sorted(raw_tracks, key=lambda x: int(x["id"]) if str(x["id"]).isdigit() else 9999)
+            filtered_tracks = []
+            
+            for t1 in sorted_tracks:
+                is_duplicate = False
+                b1 = t1["bbox"]
+                for t2 in filtered_tracks:
+                    b2 = t2["bbox"]
+                    if calculate_iou(b1, b2) > 0.7:
+                        is_duplicate = True
+                        break
+                if not is_duplicate:
+                    filtered_tracks.append(t1)
+            
+            current_tracks = filtered_tracks
+            
+            # Maintain total count seen
+            for t in current_tracks:
+                if t["id"] not in seen_track_ids:
+                    seen_track_ids.add(t["id"])
 
-            # Face recognition
-            if run_recognition:
-                for tid, state in track_states.items():
-                    if not state["active"]:
-                        continue
+            # 3. Recognition Logic at slightly slower rate
+            if now - last_recognition_time >= RECOGNITION_INTERVAL:
+                last_recognition_time = now
+                
+                for t in current_tracks:
+                    tid = t["id"]
+                    
+                    # Check cache
                     cached = recognition_cache.get(tid)
                     if cached:
-                        cached_name, cached_conf, cached_frame = cached
-                        if frame_count - cached_frame < RECOGNITION_CACHE_FRAMES:
+                        cached_name, cached_conf, cached_time = cached
+                        if now - cached_time < RECOGNITION_CACHE_TTL and cached_name != "Unknown":
                             continue
-                    bb = state.get("predicted_bbox", state["bbox"])
-                    bx1, by1, bx2, by2 = int(bb[0]), int(bb[1]), int(bb[2]), int(bb[3])
-                    bx1, by1 = max(0, bx1), max(0, by1)
-                    bx2, by2 = min(w, bx2), min(h, by2)
-                    bw = max(0, bx2 - bx1)
-                    bh = max(0, by2 - by1)
-                    if bw < 20 or bh < 20:
-                        continue
-                    fx1 = bx1 + int(0.15 * bw)
-                    fx2 = bx2 - int(0.15 * bw)
-                    fy1 = by1
-                    fy2 = by1 + int(0.45 * bh)
-                    fx1, fy1 = max(0, fx1), max(0, fy1)
-                    fx2, fy2 = min(w, fx2), min(h, fy2)
-                    if fx2 - fx1 < 20 or fy2 - fy1 < 20:
-                        continue
-                    try:
-                        name, conf = recognizer.recognize(frame, [fx1, fy1, fx2, fy2])
-                        if name != "Unknown" and conf > 0.35:
-                            recognition_cache[tid] = (name, conf, frame_count)
-
-                            # Save FACE CROP instead of full frame
-                            face_crop = extract_face_crop(frame, [bx1, by1, bx2, by2])
-                            ts = int(time.time())
-                            snap = f"snapshots/detected_{camera_id}_{tid}_{ts}.jpg"
-                            if face_crop is not None and face_crop.size > 0:
-                                cv2.imwrite(snap, face_crop)
-                            else:
-                                cv2.imwrite(snap, frame)
-
-                            persons = db_manager.get_registered_persons()
-                            person_id = next(
-                                (p[0] for p in persons if p[1].lower() == name.lower()), None
-                            )
-                            db_manager.log_detection(person_id, camera_id, snap)
-
-                            # Log to detection_logs for the Logs tab
-                            db_manager.log_detection_event(name, camera_id, snap, is_known=True)
-
-                            # Fire in-app alert (only for registered persons)
-                            alert_manager.fire(
-                                person_name=name,
-                                camera_id=camera_id,
-                                snapshot_path=snap,
-                                confidence=conf,
-                            )
-                        elif tid in recognition_cache:
-                            pass
-                    except Exception:
-                        pass
-
-            # Build render data
-            processed = []
-            for tid, state in track_states.items():
-                bbox = state["predicted_bbox"]
-                bx1 = max(0, int(bbox[0]))
-                by1 = max(0, int(bbox[1]))
-                bx2 = min(w - 1, int(bbox[2]))
-                by2 = min(h - 1, int(bbox[3]))
-                
-                box_w = bx2 - bx1
-                box_h = by2 - by1
-                if box_w < 20 or box_h < 20:
-                    continue
-                if box_w > w * 0.95 or box_h > h * 0.95:
-                    continue
-
-                name, conf = "Unknown", 0.0
-                if tid in recognition_cache:
-                    cached_name, cached_conf, cached_frame = recognition_cache[tid]
-                    if (frame_count - cached_frame) < RECOGNITION_CACHE_FRAMES:
-                        name, conf = cached_name, cached_conf
-
-                # Log ALL person detections (known and unknown) to Logs tab
-                # But only log once per track appearance
-                if name == "Unknown" and tid not in getattr(process_camera, '_logged_unknown', set()):
-                    if not hasattr(process_camera, '_logged_unknown'):
-                        process_camera._logged_unknown = set()
-                    process_camera._logged_unknown.add(tid)
                     
-                    face_crop = extract_face_crop(frame, [bx1, by1, bx2, by2])
-                    ts = int(time.time())
-                    snap = f"snapshots/unknown_{camera_id}_{tid}_{ts}.jpg"
-                    if face_crop is not None and face_crop.size > 0:
-                        cv2.imwrite(snap, face_crop)
-                    else:
-                        cv2.imwrite(snap, frame)
-                    db_manager.log_detection(None, camera_id, snap)
-                    db_manager.log_detection_event("Unknown", camera_id, snap, is_known=False)
-
-                processed.append({
-                    "id": tid, "bbox": [bx1, by1, bx2, by2],
-                    "name": name, "confidence": conf
-                })
-
-            # Active search check
-            with active_search_lock:
-                search = dict(active_search)
-
-            if search.get("running") and run_recognition:
-                for t in processed:
-                    track_key = (camera_id, t["id"])
-                    if track_key not in search.get("found_track_ids", set()):
-                        if t["name"] == "Unknown":
-                            bx1, by1, bx2, by2 = t["bbox"]
-                            bw = max(0, bx2 - bx1)
-                            bh = max(0, by2 - by1)
-                            fx1 = bx1 + int(0.15 * bw)
-                            fx2 = bx2 - int(0.15 * bw)
-                            fy1 = by1
-                            fy2 = by1 + int(0.45 * bh)
-                            fx1, fy1 = max(0, fx1), max(0, fy1)
-                            fx2, fy2 = min(frame.shape[1]-1, fx2), min(frame.shape[0]-1, fy2)
-                            face_box_guess = [fx1, fy1, fx2, fy2]
+                    # Try recognition
+                    bbox = t["bbox"]
+                    face_box = [
+                        bbox[0] + int(0.15 * (bbox[2]-bbox[0])),
+                        bbox[1],
+                        bbox[2] - int(0.15 * (bbox[2]-bbox[0])),
+                        bbox[1] + int(0.45 * (bbox[3]-bbox[1]))
+                    ]
+                    
+                    # Ensure face box is within frame
+                    face_box = [max(0, face_box[0]), max(0, face_box[1]), min(w, face_box[2]), min(h, face_box[3])]
+                    
+                    if (face_box[2] - face_box[0]) > 20 and (face_box[3] - face_box[1]) > 20:
+                        try:
+                            # Use threaded worker for recognition to avoid blocking
                             threading.Thread(
                                 target=recognition_worker,
-                                args=(frame.copy(), face_box_guess, t["id"], camera_id, recognition_cache),
+                                args=(frame.copy(), face_box, tid, camera_id, recognition_cache),
                                 daemon=True
                             ).start()
+                        except Exception:
+                            pass
 
-            # Render overlay
-            record_frame = frame.copy()
-            people_count = 0
-            for t in processed:
-                bx1, by1, bx2, by2 = t["bbox"]
-                name = str(t["name"])
-                conf = float(t["confidence"])
-                tid = str(t["id"])
+        # 4. Rendering & Streaming (FULL RATE)
+        record_frame = frame.copy()
+        people_count = 0
+        
+        display_tracks = []
+        for t in current_tracks:
+            tid = t["id"]
+            bbox = t["bbox"]
+            
+            # Fetch recognition result from cache if exists
+            name, conf = "Unknown", 0.0
+            cached = recognition_cache.get(tid)
+            if cached:
+                name, conf, _ = cached
+            
+            bx1, by1, bx2, by2 = [int(v) for v in bbox]
+            bx1, by1 = max(0, bx1), max(0, by1)
+            bx2, by2 = min(w, bx2), min(h, by2)
+            
+            color = get_person_color(int(tid) if str(tid).isdigit() else 999)
+            if name != "Unknown":
+                label = f"{name} ({conf:.2f})"
+            else:
+                label = f"Person #{tid}"
+            
+            people_count += 1
+            cv2.rectangle(record_frame, (bx1, by1), (bx2, by2), color, 2)
+            cv2.putText(record_frame, label, (bx1, max(20, by1 - 5)), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+            
+            display_tracks.append({
+                "id": tid, "bbox": [bx1, by1, bx2, by2],
+                "name": name, "confidence": conf
+            })
 
-                if name != "Unknown":
-                    body_color = (0, 255, 0)
-                    label = f"{name} ({conf:.2f})"
-                else:
-                    body_color = (0, 165, 255)
-                    label = f"Person {tid}"
-                people_count += 1
-                cv2.rectangle(record_frame, (bx1, by1), (bx2, by2), body_color, 3)
-                cv2.putText(record_frame, label, (bx1, max(by1 - 10, 25)),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, body_color, 2)
-            if occupancy_last_count.get(camera_id) != people_count:
-                occupancy_last_count[camera_id] = people_count
-                try:
-                    db_manager.log_occupancy(camera_id, people_count)
-                except Exception:
-                    pass
-            cv2.putText(record_frame, f"Count: {people_count}  Total: {len(seen_track_ids)}", (10, 30),
-                        cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 255), 2)
+            # Auto-log UNKNOWN persons if not already logged for this track
+            if name == "Unknown" and tid not in getattr(process_camera, '_logged_tracks', set()):
+                if not hasattr(process_camera, '_logged_tracks'):
+                    process_camera._logged_tracks = set()
+                process_camera._logged_tracks.add(tid)
+                
+                # Save crop
+                face_crop = extract_face_crop(frame, bbox)
+                if face_crop is not None and face_crop.size > 0:
+                    # Deduplication check
+                    new_encoding = recognizer.get_encoding(face_crop)
+                    is_duplicate = False
+                    if new_encoding is not None:
+                        with saved_encodings_lock:
+                            if camera_id not in saved_encodings:
+                                saved_encodings[camera_id] = []
+                            for old_enc in saved_encodings[camera_id]:
+                                dist = np.linalg.norm(new_encoding - old_enc)
+                                if dist < 0.7:
+                                    is_duplicate = True
+                                    break
+                            if not is_duplicate:
+                                saved_encodings[camera_id].append(new_encoding)
+                    
+                    if not is_duplicate:
+                        ts = int(time.time())
+                        full_path = f"snapshots/full_unknown_{camera_id}_{tid}_{ts}.jpg"
+                        face_path = f"snapshots/face_unknown_{camera_id}_{tid}_{ts}.jpg"
+                        
+                        cv2.imwrite(full_path, frame)
+                        cv2.imwrite(face_path, face_crop)
+                        
+                        # Store paths as JSON
+                        snapshot_json = json.dumps({"full": full_path, "face": face_path})
+                        db_manager.log_detection_event("Unknown", camera_id, snapshot_json, is_known=False)
+        
+        # Overlay count
+        cv2.putText(record_frame, f"Occupancy: {people_count} | Total Seen: {len(seen_track_ids)}", (15, 35),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
 
-            with results_lock:
-                camera_results[camera_id] = {"rendered_frame": record_frame, "frame_id": frame_id, "tracks": processed}
+        # Update occupancy log if changed
+        if occupancy_last_count.get(camera_id) != people_count:
+            occupancy_last_count[camera_id] = people_count
+            db_manager.log_occupancy(camera_id, people_count)
 
-            with writer_lock:
-                writer_data = camera_writers.get(camera_id)
-                if writer_data and writer_data.get("writer"):
-                    writer_data["writer"].write(record_frame)
+        # Update Shared Results for Streaming
+        with results_lock:
+            camera_results[camera_id] = {
+                "rendered_frame": record_frame, 
+                "frame_id": frame_id, 
+                "tracks": display_tracks
+            }
 
-        except Exception as e:
-            print(f"[process_camera:{camera_id}] {e}")
-            import traceback; traceback.print_exc()
+        # Handle Recording
+        with writer_lock:
+            writer_data = camera_writers.get(camera_id)
+            if writer_data and writer_data.get("writer"):
+                writer_data["writer"].write(record_frame)
 
 
 def recognition_worker(frame, face_bbox, track_id, camera_id, recognition_cache):
-    with active_search_lock:
-        if not active_search.get("running"):
-            return
-        target_encoding = active_search.get("encoding")
-        target_name = active_search.get("name")
-        target_person_id = active_search.get("person_id")
-        found_ids = active_search.get("found_track_ids", set())
-        track_key = (camera_id, track_id)
-        if track_key in found_ids:
-            return
-
+    # Only perform recognition if active search is running OR for regular identification
     name, confidence = recognizer.recognize(frame, face_bbox)
-
-    if name == target_name and confidence > 0.35:
-        with active_search_lock:
-            if not active_search.get("running"):
-                return
-            if track_key in active_search.get("found_track_ids", set()):
-                return
-            active_search["found_track_ids"].add(track_key)
-
-        recognition_cache[track_id] = (target_name, confidence, 0, 0)
-
-        # Save face crop
-        face_crop = extract_face_crop(frame, face_bbox, padding=0.4)
-        timestamp = int(time.time())
-        snap_name = f"snap_{camera_id}_{track_id}_{timestamp}.jpg"
-        snap_path = f"snapshots/{snap_name}"
-        if face_crop is not None and face_crop.size > 0:
-            cv2.imwrite(snap_path, face_crop)
-        else:
-            cv2.imwrite(snap_path, frame)
-        db_manager.log_detection(target_person_id, camera_id, snap_path)
-        db_manager.log_detection_event(target_name, camera_id, snap_path, is_known=True)
-        print(f"[ActiveSearch] Found {target_name} on {camera_id} — snapshot saved")
-
-        alert_manager.fire(
-            person_name=target_name,
-            camera_id=camera_id,
-            snapshot_path=snap_path,
-            confidence=confidence,
-        )
+    
+    if name != "Unknown" and confidence > 0.35:
+        # Update cache
+        recognition_cache[track_id] = (name, confidence, time.time())
+        
+        # Log to DB and emit alert if first time for this track
+        persons = db_manager.get_registered_persons()
+        person_data = next((p for p in persons if p[1].lower() == name.lower()), None)
+        
+        if person_data:
+            person_id = person_data[0]
+            # Save face crop
+            face_crop = extract_face_crop(frame, [face_bbox[0], face_bbox[1], face_bbox[2], face_bbox[3]])
+            if face_crop is not None and face_crop.size > 0:
+                # Deduplication check
+                new_encoding = recognizer.get_encoding(face_crop)
+                is_duplicate = False
+                if new_encoding is not None:
+                    with saved_encodings_lock:
+                        if camera_id not in saved_encodings:
+                            saved_encodings[camera_id] = []
+                        for old_enc in saved_encodings[camera_id]:
+                            dist = np.linalg.norm(new_encoding - old_enc)
+                            if dist < 0.7:
+                                is_duplicate = True
+                                break
+                        if not is_duplicate:
+                            saved_encodings[camera_id].append(new_encoding)
+                
+                if not is_duplicate:
+                    ts = int(time.time())
+                    full_path = f"snapshots/full_detected_{camera_id}_{track_id}_{ts}.jpg"
+                    face_path = f"snapshots/face_detected_{camera_id}_{track_id}_{ts}.jpg"
+                    
+                    cv2.imwrite(full_path, frame)
+                    cv2.imwrite(face_path, face_crop)
+                    
+                    snapshot_json = json.dumps({"full": full_path, "face": face_path})
+                    db_manager.log_detection(person_id, camera_id, snapshot_json)
+                    db_manager.log_detection_event(name, camera_id, snapshot_json, is_known=True)
+                    
+                    # Fire alert
+                    alert_manager.fire(
+                        person_name=name,
+                        camera_id=camera_id,
+                        snapshot_path=snapshot_json,
+                        confidence=confidence
+                    )
+    else:
+        # Mark as Unknown in cache to prevent constant re-scanning if desired
+        if track_id not in recognition_cache:
+            recognition_cache[track_id] = ("Unknown", 0.0, time.time())
 
 
 # ---------------------------------------------------------------------------
@@ -614,7 +581,12 @@ async def delete_camera(camera_id: str = Form(...)):
 
 @app.get("/api/cameras")
 async def api_cameras():
-    return camera_manager.get_active_cameras()
+    return camera_manager.get_all_cameras_info()
+
+@app.post("/api/cameras/toggle")
+async def toggle_camera(camera_id: str = Form(...)):
+    success, is_active = camera_manager.toggle_camera(camera_id)
+    return {"status": "success" if success else "error", "is_active": is_active}
 
 @app.get("/api/cameras_info")
 async def api_cameras_info():
@@ -720,7 +692,22 @@ async def get_active_search():
 @app.get("/api/search")
 async def api_search(name: Optional[str] = None, start_time: Optional[str] = None, end_time: Optional[str] = None):
     results = db_manager.search_detections(name, start_time, end_time)
-    return [{"id": r[0], "person_name": r[5] or "Unknown", "camera_id": r[2], "timestamp": r[3], "image_path": r[4]} for r in results]
+    res = []
+    for r in results:
+        path = r[4]
+        try:
+            paths = json.loads(path)
+            full = paths.get("full")
+            face = paths.get("face")
+        except:
+            full = path
+            face = path
+        res.append({
+            "id": r[0], "person_name": r[5] or "Unknown", 
+            "camera_id": r[2], "timestamp": r[3], 
+            "image_path": full, "face_path": face
+        })
+    return res
 
 @app.post("/api/search_by_image")
 async def search_by_image(file: UploadFile = File(...)):
@@ -793,14 +780,26 @@ async def delete_recording(record_id: int):
 @app.get("/api/logs")
 async def api_logs(limit: int = 200):
     rows = db_manager.get_detection_logs(limit)
-    return [{
-        "id": r[0], "person_name": r[1], "camera_id": r[2],
-        "timestamp": r[3], "snapshot_path": r[4], "is_known": bool(r[5])
-    } for r in rows]
+    res = []
+    for r in rows:
+        path = r[4]
+        try:
+            paths = json.loads(path)
+            full = paths.get("full")
+            face = paths.get("face")
+        except:
+            full = path
+            face = path
+        res.append({
+            "id": r[0], "person_name": r[1], "camera_id": r[2],
+            "timestamp": r[3], "snapshot_path": full,
+            "face_path": face, "is_known": bool(r[5])
+        })
+    return res
 
 @app.delete("/api/logs")
 async def clear_logs():
-    db_manager.cleanup_old_logs()
+    db_manager.clear_all_logs()
     return {"status": "success"}
 
 

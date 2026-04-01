@@ -35,7 +35,7 @@ class FaceRecognizer:
         if not face_bbox:
             return "Unknown", 0.0
 
-        fx1, fy1, fx2, fy2 = face_bbox
+        fx1, fy1, fx2, fy2 = [int(b) for b in face_bbox]
         face_crop = frame[max(0, fy1):max(0, fy2), max(0, fx1):max(0, fx2)]
         
         if face_crop.size > 0:

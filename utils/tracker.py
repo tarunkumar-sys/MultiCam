@@ -1,8 +1,9 @@
 from deep_sort_realtime.deepsort_tracker import DeepSort
 
 class ObjectTracker:
-    def __init__(self, max_age=10, n_init=1):
-        self.tracker = DeepSort(max_age=max_age, n_init=n_init, max_iou_distance=0.9)
+    def __init__(self, max_age=3, n_init=1):
+        # iou_threshold=0.25 maps to max_iou_distance=0.75 in DeepSort
+        self.tracker = DeepSort(max_age=max_age, n_init=n_init, max_iou_distance=0.75)
         # Map track_id -> last known tight bbox [x1,y1,x2,y2] from actual detection
         self._det_bbox: dict = {}
 

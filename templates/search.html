@@ -111,9 +111,10 @@ function renderResults(data, gridId) {
         grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1;"><i class="fa-solid fa-magnifying-glass-minus"></i><p>No matches found.</p></div>';
         return;
     }
-    grid.innerHTML = data.map(r => `
-        <div class="detection-card animate-in">
-            <img src="/${r.image_path}" class="detection-image">
+    window.lastSearchData = data; // Store globally for lightbox
+    grid.innerHTML = data.map((r, idx) => `
+        <div class="detection-card animate-in" onclick="openLightbox(${idx}, window.lastSearchData)" style="cursor:pointer">
+            <img src="/${r.face_path || r.image_path}" class="detection-image">
             <div class="detection-info">
                 <h4>${r.person_name}</h4>
                 <p><i class="fa-solid fa-video" style="font-size:10px;"></i> ${r.camera_id}</p>

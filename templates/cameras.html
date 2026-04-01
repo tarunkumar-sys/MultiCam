@@ -99,22 +99,40 @@ async function loadCameras() {
             list.innerHTML = '<div class="empty-state"><i class="fa-solid fa-video-slash"></i><p>No cameras connected</p></div>';
             return;
         }
-        list.innerHTML = cameras.map(cam => `
-            <div class="cam-item">
+        list.innerHTML = cameras.map(cam => {
+            const isActive = cam.status === 'active';
+            const statusClass = isActive ? 'active' : 'paused';
+            const toggleIcon = isActive ? 'fa-pause' : 'fa-play';
+            const toggleTitle = isActive ? 'Pause' : 'Resume';
+            const btnClass = isActive ? 'btn-ghost' : 'btn-accent-dim';
+            
+            return `
+            <div class="cam-item animate-in">
                 <div class="cam-item-info">
-                    <div class="cam-status active"></div>
+                    <div class="cam-status ${statusClass}"></div>
                     <div>
-                        <strong style="font-size:0.85rem;color:var(--text);">${cam}</strong>
+                        <strong style="font-size:0.85rem;color:${isActive ? 'var(--text)' : 'var(--text-dim)'};">${cam.id}</strong>
+                        <div style="font-size:10px; color:var(--text-dim);">${cam.source}</div>
                     </div>
                 </div>
                 <div class="cam-item-actions">
-                    <button class="btn btn-ghost btn-sm" onclick="deleteCam('${cam}')">
+                    <button class="btn ${btnClass} btn-sm" onclick="toggleCam('${cam.id}')" title="${toggleTitle}">
+                        <i class="fa-solid ${toggleIcon}"></i>
+                    </button>
+                    <button class="btn btn-ghost btn-sm" onclick="deleteCam('${cam.id}')" title="Delete">
                         <i class="fa-solid fa-trash"></i>
                     </button>
                 </div>
-            </div>
-        `).join('');
+            </div>`;
+        }).join('');
     } catch(e) { console.error(e); }
+}
+
+async function toggleCam(camId) {
+    const fd = new FormData();
+    fd.append('camera_id', camId);
+    await fetch('/api/cameras/toggle', { method: 'POST', body: fd });
+    loadCameras();
 }
 
 async function deleteCam(camId) {

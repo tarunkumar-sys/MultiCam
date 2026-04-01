@@ -51,17 +51,19 @@ async function loadLogs() {
             return;
         }
 
-        container.innerHTML = data.map(log => {
+        window.lastLogsData = data; // Store globally for lightbox items reference
+        container.innerHTML = data.map((log, idx) => {
             const date = new Date(log.timestamp + "Z");
             const timeStr = date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
             const dateStr = date.toLocaleDateString();
             const knownClass = log.is_known ? 'known' : '';
             const icon = log.is_known ? '<i class="fa-solid fa-user-check" style="color:var(--success);font-size:10px;"></i>' : '<i class="fa-solid fa-user-secret" style="color:var(--warning);font-size:10px;"></i>';
             const name = log.person_name || 'Unknown';
+            const thumb = log.face_path || log.snapshot_path;
             
             return `
-            <div class="log-entry animate-in">
-                <img src="/${log.snapshot_path}" alt="Snap" class="log-snap" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9IiMxZDFkMjMiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZmlsbD0iIzNmM2Y0NiIgZHk9Ii4zZW0iIHRleHQtYW5jaG9yPSJtaWRkbGUiPj9fPjwvdGV4dD48L3N2Zz4='">
+            <div class="log-entry animate-in" onclick="openLightbox(${idx}, window.lastLogsData)" style="cursor:pointer">
+                <img src="/${thumb}" alt="Snap" class="log-snap" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9IiMxZDFkMjMiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZmlsbD0iIzNmM2Y0NiIgZHk9Ii4zZW0iIHRleHQtYW5jaG9yPSJtaWRkbGUiPj9fPjwvdGV4dD48L3N2Zz4='">
                 <div class="log-info">
                     <div class="log-name ${knownClass}">${icon} ${name}</div>
                     <div class="log-meta">
