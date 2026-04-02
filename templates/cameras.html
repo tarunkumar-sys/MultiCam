@@ -116,6 +116,9 @@ async function loadCameras() {
                     </div>
                 </div>
                 <div class="cam-item-actions">
+                    <button class="btn btn-roi btn-sm" onclick="openRoiModal('${cam.id}')" title="Detection ROI">
+                        <i class="fa-solid fa-draw-polygon"></i> <span>ROI</span>
+                    </button>
                     <button class="btn ${btnClass} btn-sm" onclick="toggleCam('${cam.id}')" title="${toggleTitle}">
                         <i class="fa-solid ${toggleIcon}"></i>
                     </button>
@@ -126,6 +129,123 @@ async function loadCameras() {
             </div>`;
         }).join('');
     } catch(e) { console.error(e); }
+}
+
+let activeRoiCam = null;
+let roiPoints = [];
+
+async function openRoiModal(camId) {
+    activeRoiCam = camId;
+    roiPoints = [];
+    document.getElementById('roi-cam-name').textContent = camId;
+    document.getElementById('roi-overlay').style.display = 'flex';
+    
+    // Load existing ROI
+    try {
+        const res = await fetch(`/api/cameras/${camId}/roi`);
+        const data = await res.json();
+        if (data.roi && Array.isArray(data.roi)) {
+            roiPoints = data.roi;
+        }
+    } catch(e) { console.error(e); }
+    
+    const img = document.getElementById('roi-stream');
+    img.src = `/video_feed/${camId}?t=${Date.now()}`;
+    
+    // Set canvas size once image loads
+    img.onload = () => {
+        const canvas = document.getElementById('roi-canvas');
+        canvas.width = img.clientWidth;
+        canvas.height = img.clientHeight;
+        drawRoi();
+    };
+}
+
+function closeRoiModal() {
+    document.getElementById('roi-overlay').style.display = 'none';
+    document.getElementById('roi-stream').src = '';
+    activeRoiCam = null;
+}
+
+function handleCanvasClick(e) {
+    const canvas = e.target;
+    const rect = canvas.getBoundingClientRect();
+    const x = Math.round(((e.clientX - rect.left) / rect.width) * canvas.width);
+    const y = Math.round(((e.clientY - rect.top) / rect.height) * canvas.height);
+    
+    // points should be relative to actual frame size? 
+    // actually, let's keep them as scale-relative or absolute based on current view.
+    // the backend will have to know the resolution or we send normalized [0..1]
+    // let's send absolute pixels based on current DISPLAYED size, then we scale on backend?
+    // safer: send relative [0..1] coordinates.
+    
+    const relX = (e.clientX - rect.left) / rect.width;
+    const relY = (e.clientY - rect.top) / rect.height;
+    
+    roiPoints.push([relX, relY]);
+    drawRoi();
+}
+
+function drawRoi() {
+    const canvas = document.getElementById('roi-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width;
+    const h = canvas.height;
+    
+    ctx.clearRect(0, 0, w, h);
+    
+    if (roiPoints.length === 0) return;
+    
+    ctx.strokeStyle = '#00FFCC';
+    ctx.fillStyle = 'rgba(0, 255, 204, 0.2)';
+    ctx.lineWidth = 2;
+    
+    ctx.beginPath();
+    ctx.moveTo(roiPoints[0][0] * w, roiPoints[0][1] * h);
+    for (let i = 1; i < roiPoints.length; i++) {
+        ctx.lineTo(roiPoints[i][0] * w, roiPoints[i][1] * h);
+    }
+    
+    if (roiPoints.length > 2) {
+        ctx.closePath();
+        ctx.fill();
+    }
+    ctx.stroke();
+    
+    // Draw points
+    roiPoints.forEach(p => {
+        ctx.beginPath();
+        ctx.arc(p[0] * w, p[1] * h, 4, 0, Math.PI * 2);
+        ctx.fillStyle = '#00FFCC';
+        ctx.fill();
+    });
+}
+
+function clearRoi() {
+    roiPoints = [];
+    drawRoi();
+}
+
+async function saveRoi() {
+    if (!activeRoiCam) return;
+    
+    // We'll send relative points to the backend. The backend will map them to frame resolution.
+    // If it's 4 points [x,y,w,h], we should handle that too, but polygon is better.
+    
+    try {
+        const res = await fetch(`/api/cameras/${activeRoiCam}/roi`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ roi: roiPoints })
+        });
+        const data = await res.json();
+        if (data.status === 'success') {
+            closeRoiModal();
+        } else {
+            alert('Failed to save ROI');
+        }
+    } catch(e) { alert('Error saving ROI'); }
 }
 
 async function toggleCam(camId) {
@@ -145,4 +265,26 @@ async function deleteCam(camId) {
 
 loadCameras();
 </script>
+
+<div class="modal-overlay" id="roi-overlay" style="display:none; z-index: 1000;">
+    <div class="modal-card" style="max-width: 900px; width: 95%;">
+        <div class="modal-header">
+            <h3>Detection ROI — <span id="roi-cam-name"></span></h3>
+            <button class="modal-close" onclick="closeRoiModal()"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body">
+            <p class="modal-hint">Click on the image to draw a polygon. Detection will only occur inside this region.</p>
+            <div style="position:relative; background: #000; border-radius: 8px; overflow: hidden; margin: 15px 0;">
+                <img id="roi-stream" style="width:100%; display:block;" src="">
+                <canvas id="roi-canvas" style="position:absolute; top:0; left:0; width:100%; height:100%; cursor:crosshair;" onclick="handleCanvasClick(event)"></canvas>
+            </div>
+            <div class="modal-actions" style="margin-top: 20px;">
+                <button class="btn btn-ghost" onclick="clearRoi()"><i class="fa-solid fa-eraser"></i> Clear Points</button>
+                <div style="flex-grow: 1;"></div>
+                <button class="btn btn-ghost" onclick="closeRoiModal()">Cancel</button>
+                <button class="btn btn-accent" onclick="saveRoi()"><i class="fa-solid fa-check"></i> Save Region</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}

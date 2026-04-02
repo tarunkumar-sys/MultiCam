@@ -79,6 +79,13 @@ class DatabaseManager:
                     FOREIGN KEY (person_id) REFERENCES registered_persons (id)
                 )
             ''')
+            # ─── NEW: Camera settings (ROI, etc.) ──────────────────────
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS camera_settings (
+                    camera_id TEXT PRIMARY KEY,
+                    roi TEXT
+                )
+            ''')
             conn.commit()
 
         # Seed default admin credentials if not set
@@ -564,3 +571,25 @@ class DatabaseManager:
             """, prm)
             row = cur.fetchone()
             return {"known": row[0] or 0, "unknown": row[1] or 0}
+    # ─── Camera Settings ──────────────────────────────────────────────
+    def set_camera_roi(self, camera_id, roi_json):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT OR REPLACE INTO camera_settings (camera_id, roi) VALUES (?, ?)",
+                (camera_id, roi_json)
+            )
+            conn.commit()
+
+    def get_camera_roi(self, camera_id):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT roi FROM camera_settings WHERE camera_id=?", (camera_id,))
+            row = cursor.fetchone()
+            return row[0] if row else None
+
+    def get_all_camera_rois(self):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT camera_id, roi FROM camera_settings")
+            return {r[0]: r[1] for r in cursor.fetchall()}

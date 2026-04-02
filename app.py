@@ -141,6 +141,16 @@ active_search_lock = threading.Lock()
 saved_encodings: Dict[str, List[np.ndarray]] = {}
 saved_encodings_lock = threading.Lock()
 
+# camera_id -> ROI (either [x,y,w,h] or list of [x,y] points)
+all_rois_raw = db_manager.get_all_camera_rois()
+camera_rois: Dict[str, Any] = {}
+for cid, r_json in all_rois_raw.items():
+    try:
+        camera_rois[cid] = json.loads(r_json)
+    except:
+        camera_rois[cid] = None
+rois_lock = threading.Lock()
+
 # ---------------------------------------------------------------------------
 # Face crop helper
 # ---------------------------------------------------------------------------
@@ -207,8 +217,35 @@ def process_camera(camera_id: str):
         if now - last_process_time >= FRAME_INTERVAL:
             last_process_time = now
             
+            # Apply ROI if defined
+            current_roi = None
+            with rois_lock:
+                current_roi = camera_rois.get(camera_id)
+            
+            detect_frame = frame.copy()
+            if current_roi:
+                mask = np.zeros((h, w), dtype=np.uint8)
+                if isinstance(current_roi, list) and len(current_roi) > 0:
+                    if isinstance(current_roi[0], list): # Polygon points
+                        # Map normalized [0..1] points to absolute pixels
+                        abs_pts = []
+                        for p in current_roi:
+                            if len(p) >= 2:
+                                abs_pts.append([int(p[0] * w), int(p[1] * h)])
+                        if abs_pts:
+                            pts = np.array(abs_pts, np.int32)
+                            cv2.fillPoly(mask, [pts], 255)
+                    elif len(current_roi) == 4: # [x, y, w, h]
+                        # Rect could also be absolute or relative. Let's assume relative if < 1
+                        rx, ry, rw, rh = current_roi
+                        if rx <= 1 and ry <= 1 and rw <= 1 and rh <= 1:
+                            rx, ry, rw, rh = int(rx*w), int(ry*h), int(rw*w), int(rh*h)
+                        cv2.rectangle(mask, (rx, ry), (rx+rw, ry+rh), 255, -1)
+                
+                detect_frame = cv2.bitwise_and(frame, frame, mask=mask)
+            
             # Run detection
-            detections = detector.detect(frame)
+            detections = detector.detect(detect_frame)
             
             # Run tracking
             raw_tracks = tracker.update(detections, frame)
@@ -617,7 +654,34 @@ async def delete_occupancy_all(camera_id: Optional[str] = None, start_time: Opti
 
 
 # ---------------------------------------------------------------------------
-# Recording API
+# ─── Camera Settings API ───────────────────────────────────────────
+
+@app.get("/api/cameras/{camera_id}/roi")
+async def get_camera_roi(camera_id: str):
+    with rois_lock:
+        roi = camera_rois.get(camera_id)
+    return {"roi": roi}
+
+@app.post("/api/cameras/{camera_id}/roi")
+async def set_camera_roi(camera_id: str, request: Request):
+    try:
+        data = await request.json()
+        roi = data.get("roi") # Expected: [x,y,w,h] or [[x,y], [x,y], ...]
+        db_manager.set_camera_roi(camera_id, json.dumps(roi))
+        with rois_lock:
+            camera_rois[camera_id] = roi
+        return {"status": "success"}
+    except Exception as e:
+        return {"status": "error", "message": f"Malformed ROI: {e}"}
+
+@app.post("/api/cameras/{camera_id}/clear_roi")
+async def clear_camera_roi(camera_id: str):
+    db_manager.set_camera_roi(camera_id, "null")
+    with rois_lock:
+        camera_rois[camera_id] = None
+    return {"status": "success"}
+
+# ─── Recording API ────────────────────────────────────────────────
 # ---------------------------------------------------------------------------
 
 @app.post("/api/toggle_recording")
