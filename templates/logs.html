@@ -9,15 +9,22 @@
         <p class="subtitle">Rolling 24-hour log of all system detections. Older logs are automatically purged.</p>
     </div>
     <div class="filter-bar">
-        <button class="btn btn-ghost" onclick="loadLogs()"><i class="fa-solid fa-rotate-right"></i> Refresh Logs</button>
-        <button class="btn btn-danger-outline" onclick="clearLogs()"><i class="fa-solid fa-trash"></i> Clear All Now</button>
+        <div class="search-box">
+            <input type="text" placeholder=" Search..." oninput="handleSearch()">
+        </div>
+        <button class="btn btn-ghost" onclick="loadLogs()"><i class="fa-solid fa-rotate-right"></i> Refresh
+            Logs</button>
+        <button class="btn btn-danger-outline" onclick="clearLogs()"><i class="fa-solid fa-trash"></i> Clear All
+            Now</button>
     </div>
 </div>
 
 <div class="card">
     <div class="card-header">
         <h3 id="log-count">Loading logs...</h3>
-        <span class="badge badge-info"><i class="fa-regular fa-clock"></i> 24h Cooldown</span>
+        <div class="flex gap-sm items-center">
+            <span class="badge badge-info"><i class="fa-regular fa-clock"></i> 24h Cooldown</span>
+        </div>
     </div>
     <div class="card-body">
         <div id="logs-container" class="logs-container">
@@ -32,63 +39,98 @@
 
 {% block scripts %}
 <script>
-async function loadLogs() {
-    const container = document.getElementById('logs-container');
-    const header = document.getElementById('log-count');
-    
-    try {
-        const res = await fetch('/api/logs?limit=300');
-        const data = await res.json();
-        
-        header.innerHTML = `<i class="fa-solid fa-list-ol" style="color:var(--text-dim);margin-right:6px;"></i> ${data.length} Recent Events`;
-        
-        if (!data.length) {
+    async function loadLogs() {
+        const container = document.getElementById('logs-container');
+        const header = document.getElementById('log-count');
+        const searchInput = document.getElementById('log-search');
+
+        try {
+            const res = await fetch('/api/logs?limit=300');
+            const data = await res.json();
+            window.lastLogsData = data; // Store globally for lightbox and filtering
+
+            renderLogs();
+        } catch (e) {
+            container.innerHTML = `<div class="empty-state"><p class="required">Failed to load logs.</p></div>`;
+        }
+    }
+
+    function handleSearch() {
+        renderLogs();
+    }
+
+    function renderLogs() {
+        const container = document.getElementById('logs-container');
+        const header = document.getElementById('log-count');
+        const query = document.getElementById('log-search').value.toLowerCase().trim();
+
+        if (!window.lastLogsData) return;
+
+        const filtered = window.lastLogsData.filter(log => {
+            if (!query) return true;
+
+            const date = new Date(log.timestamp + "Z");
+            const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const dateStr = date.toLocaleDateString();
+            const name = (log.person_name || 'Unknown').toLowerCase();
+            const camera = (log.camera_id || '').toLowerCase();
+
+            // Search in name, camera id, time string, and date string
+            return name.includes(query) ||
+                camera.includes(query) ||
+                timeStr.toLowerCase().includes(query) ||
+                dateStr.toLowerCase().includes(query);
+        });
+
+        header.innerHTML = `<i class="fa-solid fa-list-ol" style="color:var(--text-dim);margin-right:6px;"></i> ${filtered.length} ${query ? 'Matches' : 'Recent Events'}`;
+
+        if (!filtered.length) {
             container.innerHTML = `
-                <div class="empty-state">
-                    <i class="fa-solid fa-clipboard-check"></i>
-                    <p>No detection logs in the past 24 hours.</p>
-                </div>`;
+            <div class="empty-state">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <p>${query ? 'No matches found for "' + query + '"' : 'No detection logs in the past 24 hours.'}</p>
+            </div>`;
             return;
         }
 
-        window.lastLogsData = data; // Store globally for lightbox items reference
-        container.innerHTML = data.map((log, idx) => {
+        container.innerHTML = filtered.map((log, idx) => {
             const date = new Date(log.timestamp + "Z");
-            const timeStr = date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
+            const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
             const dateStr = date.toLocaleDateString();
             const knownClass = log.is_known ? 'known' : '';
             const icon = log.is_known ? '<i class="fa-solid fa-user-check" style="color:var(--success);font-size:10px;"></i>' : '<i class="fa-solid fa-user-secret" style="color:var(--warning);font-size:10px;"></i>';
             const name = log.person_name || 'Unknown';
             const thumb = log.face_path || log.snapshot_path;
-            
+
+            // We pass filtered to lightbox so navigation works within search results
             return `
-            <div class="log-entry animate-in" onclick="openLightbox(${idx}, window.lastLogsData)" style="cursor:pointer">
-                <img src="/${thumb}" alt="Snap" class="log-snap" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9IiMxZDFkMjMiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZmlsbD0iIzNmM2Y0NiIgZHk9Ii4zZW0iIHRleHQtYW5jaG9yPSJtaWRkbGUiPj9fPjwvdGV4dD48L3N2Zz4='">
-                <div class="log-info">
-                    <div class="log-name ${knownClass}">${icon} ${name}</div>
-                    <div class="log-meta">
-                        <span><i class="fa-solid fa-video" style="font-size:9px;"></i> ${log.camera_id}</span>
-                        <span><i class="fa-regular fa-calendar" style="font-size:9px;"></i> ${dateStr}</span>
-                    </div>
+        <div class="log-entry animate-in" onclick="openLightbox(${idx}, window.currentFilteredLogs)" style="cursor:pointer" data-id="${log.id}">
+            <img src="/${thumb}" alt="Snap" class="log-snap" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9IiMxZDFkMjMiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZmlsbD0iIzNmM2Y0NiIgZHk9Ii4zZW0iIHRleHQtYW5jaG9yPSJtaWRkbGUiPj9fPjwvdGV4dD48L3N2Zz4='">
+            <div class="log-info">
+                <div class="log-name ${knownClass}">${icon} ${name}</div>
+                <div class="log-meta">
+                    <span><i class="fa-solid fa-video" style="font-size:9px;"></i> ${log.camera_id}</span>
+                    <span><i class="fa-regular fa-calendar" style="font-size:9px;"></i> ${dateStr}</span>
                 </div>
-                <div class="log-time">${timeStr}</div>
-            </div>`;
+            </div>
+            <div class="log-time">${timeStr}</div>
+        </div>`;
         }).join('');
-    } catch(e) {
-        container.innerHTML = `<div class="empty-state"><p class="required">Failed to load logs.</p></div>`;
+
+        // Store current filtered set for lightbox
+        window.currentFilteredLogs = filtered;
     }
-}
 
-async function clearLogs() {
-    if(!confirm("Are you sure you want to forcibly delete all recent logs? They will naturally expire after 24 hours anyway.")) return;
-    try {
-        await fetch('/api/logs', { method: 'DELETE' });
-        loadLogs();
-    } catch(e) { console.error('Failed to clear logs', e); }
-}
+    async function clearLogs() {
+        if (!confirm("Are you sure you want to forcibly delete all recent logs? They will naturally expire after 24 hours anyway.")) return;
+        try {
+            await fetch('/api/logs', { method: 'DELETE' });
+            loadLogs();
+        } catch (e) { console.error('Failed to clear logs', e); }
+    }
 
-// Auto-refresh logs every 15 seconds
-loadLogs();
-setInterval(loadLogs, 15000);
+    // Auto-refresh logs every 15 seconds
+    loadLogs();
+    setInterval(loadLogs, 15000);
 </script>
 {% endblock %}

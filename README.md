@@ -118,18 +118,6 @@ pip install -r requirements.txt
 ```bash
 python app.py
 ```
-user: test
-pasword: dei@12@12
-ip:10.7.16.48
-port: 554
-rtsp://test:dei@12@12@10.7.16.48:554
-
-
-ip: 10.7.3.26
-user name: object
-pasword: Test123
-rtsp://object:test123@10.7.3.26:554
-
 Open your browser at **http://localhost:8000**
 
 > Model weights (YOLOv8n + FaceNet) download automatically on first run.
