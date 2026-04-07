@@ -13,13 +13,13 @@
     </button>
 </div>
 
-<div class="card" style="margin-bottom: 32px;">
+<div class="card people-card-margin">
     <div class="card-header">
-        <h3><i class="fa-solid fa-users-viewfinder" style="color:var(--accent);margin-right:6px;"></i> Monitored Identities</h3>
+        <h3 class="card-title-with-icon"><i class="fa-solid fa-users-viewfinder icon-accent"></i> Monitored Identities</h3>
     </div>
     <div class="card-body">
         <div id="people-list" class="person-grid">
-            <div class="empty-state" style="grid-column:1/-1;">
+            <div class="empty-state empty-state-full-col">
                 <i class="fa-solid fa-spinner fa-spin"></i>
                 <p>Loading...</p>
             </div>
@@ -47,8 +47,8 @@
                 <div class="form-group">
                     <label>Face Image</label>
                     <input type="file" name="file" id="person-file" accept="image/*" required onchange="previewImg(this)">
-                    <div id="img-preview" style="display:none;margin-top:12px;text-align:center;">
-                        <img id="preview-src" src="" alt="preview" style="max-width:120px;border-radius:var(--radius-sm);border:1px solid var(--border);">
+                    <div id="img-preview" class="img-preview-container">
+                        <img id="preview-src" src="" alt="preview" class="img-preview">
                     </div>
                 </div>
                 <div class="modal-actions">
@@ -104,23 +104,23 @@ async function loadPeople() {
         const grid = document.getElementById('people-list');
         
         if (!data.length) {
-            grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1;"><i class="fa-solid fa-users-slash"></i><p>No persons registered yet.</p></div>';
+            grid.innerHTML = '<div class="empty-state empty-state-full-col"><i class="fa-solid fa-users-slash"></i><p>No persons registered yet.</p></div>';
             return;
         }
 
         grid.innerHTML = data.map(p => `
             <div class="person-card-item animate-in">
-                <div style="position:relative;display:inline-block;">
+                <div class="person-img-container">
                     <img src="/${p.image_path}" alt="${p.name}">
-                    <div style="position:absolute;bottom:10px;right:-5px;width:14px;height:14px;border-radius:50%;background:${p.alert_enabled ? 'var(--success)' : 'var(--text-dim)'};border:2px solid var(--bg-surface);" title="${p.alert_enabled ? 'Alerts ON' : 'Alerts OFF'}"></div>
+                    <div class="person-status-indicator" title="${p.alert_enabled ? 'Alerts ON' : 'Alerts OFF'}"></div>
                 </div>
                 <h4>${p.name}</h4>
-                <div class="flex-col gap-sm" style="margin-top:12px;">
-                    <label style="font-size:0.75rem;color:var(--text-dim);display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;">
+                <div class="flex-col gap-sm person-actions-container">
+                    <label class="person-alert-label">
                         <input type="checkbox" ${p.alert_enabled ? 'checked' : ''} onchange="toggleAlert(${p.id}, this.checked)">
                         Alert when seen
                     </label>
-                    <button class="btn btn-danger-outline btn-sm w-full" style="padding:4px;width:100%;" onclick="deletePerson(${p.id})">Delete Identity</button>
+                    <button class="btn btn-danger-outline btn-sm w-full person-delete-btn" onclick="deletePerson(${p.id})">Delete Identity</button>
                 </div>
             </div>
         `).join('');

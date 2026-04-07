@@ -27,19 +27,19 @@
         <div class="stat-sub">Across all cameras</div>
     </div>
     <div class="stat-card">
-        <div class="stat-icon" style="color:var(--success);"><i class="fa-solid fa-id-card"></i></div>
+        <div class="stat-icon stat-icon-success"><i class="fa-solid fa-id-card"></i></div>
         <div class="stat-label">Unique Persons</div>
         <div class="stat-value" id="stat-unique">-</div>
         <div class="stat-sub" id="stat-unique-sub">Known identities</div>
     </div>
     <div class="stat-card">
-        <div class="stat-icon" style="color:rgba(56, 189, 248, 1);"><i class="fa-solid fa-video"></i></div>
+        <div class="stat-icon stat-icon-info"><i class="fa-solid fa-video"></i></div>
         <div class="stat-label">Busiest Camera</div>
-        <div class="stat-value" style="font-size:1.1rem;margin-top:6px;" id="stat-busy-cam">-</div>
+        <div class="stat-value busiest-cam-value" id="stat-busy-cam">-</div>
         <div class="stat-sub" id="stat-busy-cam-sub">No data available</div>
     </div>
     <div class="stat-card">
-        <div class="stat-icon" style="color:var(--warning);"><i class="fa-solid fa-chart-line"></i></div>
+        <div class="stat-icon stat-icon-warning"><i class="fa-solid fa-chart-line"></i></div>
         <div class="stat-label">Peak Occupancy</div>
         <div class="stat-value" id="stat-peak">-</div>
         <div class="stat-sub" id="stat-peak-sub">No occupancy recorded</div>
@@ -48,24 +48,24 @@
 
 <div class="grid-2">
     <!-- Trend Chart -->
-    <div class="card animate-in" style="animation-delay:0.1s">
+    <div class="card animate-in analytics-card-delay-1">
         <div class="card-header">
-            <h3><i class="fa-solid fa-chart-area" style="margin-right:8px;color:var(--accent);"></i> Occupancy Trend</h3>
+            <h3 class="card-title-with-icon"><i class="fa-solid fa-chart-area icon-accent"></i> Occupancy Trend</h3>
         </div>
         <div class="card-body">
-            <div style="height:300px;position:relative;">
+            <div class="chart-container chart-height-300">
                 <canvas id="occupancyChart"></canvas>
             </div>
         </div>
     </div>
 
     <!-- Identity Table -->
-    <div class="card animate-in" style="animation-delay:0.15s">
+    <div class="card animate-in analytics-card-delay-2">
         <div class="card-header">
-            <h3><i class="fa-solid fa-ranking-star" style="margin-right:8px;color:var(--warning);"></i> Frequent Visitors</h3>
+            <h3 class="card-title-with-icon"><i class="fa-solid fa-ranking-star icon-warning"></i> Frequent Visitors</h3>
         </div>
-        <div class="card-body" style="padding:0;">
-            <div class="table-wrap" style="border:none;border-radius:0;">
+        <div class="card-body card-body-no-padding">
+            <div class="table-wrap table-wrap-no-border">
                 <table id="top-persons-table">
                     <thead>
                         <tr>
@@ -74,7 +74,7 @@
                             <th>Primary Camera</th>
                         </tr>
                     </thead>
-                    <tbody><tr><td colspan="3" style="text-align:center;padding:40px;">Initializing...</td></tr></tbody>
+                    <tbody><tr><td colspan="3" class="table-loading-cell">Initializing...</td></tr></tbody>
                 </table>
             </div>
         </div>
@@ -83,25 +83,25 @@
 
 <div class="grid-2 mt-md">
     <!-- Identity Ratio -->
-    <div class="card animate-in" style="animation-delay:0.2s">
+    <div class="card animate-in analytics-card-delay-3">
         <div class="card-header">
-            <h3><i class="fa-solid fa-pie-chart" style="margin-right:8px;color:var(--success);"></i> Recognition Ratio</h3>
+            <h3 class="card-title-with-icon"><i class="fa-solid fa-pie-chart icon-success"></i> Recognition Ratio</h3>
         </div>
         <div class="card-body">
-            <div style="height:250px;position:relative;">
+            <div class="chart-container chart-height-250">
                 <canvas id="ratioChart"></canvas>
             </div>
-            <div id="ratio-details" style="text-align:center;margin-top:20px;color:var(--text-dim);font-size:12px;"></div>
+            <div id="ratio-details" class="ratio-details"></div>
         </div>
     </div>
 
     <!-- Weekly Activity -->
-    <div class="card animate-in" style="animation-delay:0.25s">
+    <div class="card animate-in analytics-card-delay-4">
         <div class="card-header">
-            <h3><i class="fa-solid fa-calendar-alt" style="margin-right:8px;color:rgba(56, 189, 248, 1);"></i> Activity Heatmap</h3>
+            <h3 class="card-title-with-icon"><i class="fa-solid fa-calendar-alt icon-info"></i> Activity Heatmap</h3>
         </div>
         <div class="card-body">
-            <div style="height:250px;position:relative;">
+            <div class="chart-container chart-height-250">
                 <canvas id="heatmapChart"></canvas>
             </div>
         </div>
@@ -160,7 +160,7 @@ function initCharts() {
 
 function formatDateLabel(isoString) {
     try {
-        const d = new Date(isoString + "Z");
+        const d = new Date((isoString || "").replace(" ", "T") + "Z");
         if (isNaN(d.getTime())) return isoString;
         return d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
     } catch(e) { return isoString; }
@@ -178,7 +178,7 @@ async function loadAnalytics() {
         document.getElementById('stat-unique-sub').textContent = `${data.registered_persons || 0} registered identities`;
         document.getElementById('stat-peak').textContent = data.peak_occupancy || 0;
         if (data.peak_time) {
-            const timePart = new Date(data.peak_time + "Z").toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+            const timePart = new Date((data.peak_time || "").replace(" ", "T") + "Z").toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
             document.getElementById('stat-peak-sub').textContent = `at ${timePart}`;
         }
     } catch(e) {}
@@ -219,13 +219,13 @@ async function loadAnalytics() {
         const res = await fetch(`/api/analytics/top_persons?hours=${hours}&limit=5`);
         const data = await res.json();
         const tbody = document.querySelector('#top-persons-table tbody');
-        if (!data.length) tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;padding:40px;color:var(--text-dim);">No significant activity detected</td></tr>';
+        if (!data.length) tbody.innerHTML = '<tr><td colspan="3" class="table-empty-cell">No significant activity detected</td></tr>';
         else {
             tbody.innerHTML = data.map(p => `
                 <tr>
-                    <td style="color:var(--text);font-weight:500;">${p.name}</td>
+                    <td class="person-name-cell">${p.name}</td>
                     <td><span class="badge badge-info">${p.count}</span></td>
-                    <td><i class="fa-solid fa-video" style="font-size:10px;margin-right:5px;opacity:0.5;"></i> ${p.top_camera}</td>
+                    <td class="camera-cell"><i class="fa-solid fa-video camera-icon"></i> ${p.top_camera}</td>
                 </tr>
             `).join('');
         }
@@ -249,4 +249,3 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 </script>
 {% endblock %}
-}

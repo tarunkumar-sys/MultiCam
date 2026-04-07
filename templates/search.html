@@ -19,12 +19,12 @@
 <!-- Tab 1: Database Search -->
 <div id="db-search-tab" class="tab-content active animate-in">
     <div class="filter-bar">
-        <div class="form-group mb-0">
-            <input type="text" id="s-name" placeholder="Person Name (e.g. John)" style="width:200px;">
+        <div class="form-group search-form-group">
+            <input type="text" id="s-name" placeholder="Person Name (e.g. John)" class="search-name-input">
         </div>
-        <div class="form-group mb-0 flex items-center gap-sm">
+        <div class="form-group search-form-group search-datetime-group">
             <input type="datetime-local" id="s-start"> 
-            <span style="color:var(--text-dim);">to</span>
+            <span class="search-datetime-separator">to</span>
             <input type="datetime-local" id="s-end">
         </div>
         <button class="btn btn-accent" onclick="searchDetections()"><i class="fa-solid fa-magnifying-glass"></i> Search</button>
@@ -32,9 +32,9 @@
     </div>
     
     <div class="card">
-        <div class="card-body" style="padding:0;">
-            <div id="results-grid" class="results-grid" style="padding:20px;">
-                <div class="empty-state" style="grid-column:1/-1;">
+        <div class="card-body card-body-no-padding">
+            <div id="results-grid" class="results-grid results-grid-padded">
+                <div class="empty-state empty-state-full-col">
                     <i class="fa-solid fa-server"></i>
                     <p>Enter criteria above to query the database.</p>
                 </div>
@@ -45,16 +45,16 @@
 
 <!-- Tab 2: Image Search -->
 <div id="img-search-tab" class="tab-content animate-in">
-    <div class="section-panel" style="max-width:500px; margin-bottom:24px;">
+    <div class="section-panel search-upload-panel">
         <h3>Upload Photo to Search</h3>
-        <input type="file" id="search-image" accept="image/*" class="w-full mb-3" style="margin-bottom:12px;">
-        <button class="btn btn-accent w-full" style="width:100%;" onclick="searchByImage()"><i class="fa-solid fa-camera"></i> Find Face in Database</button>
+        <input type="file" id="search-image" accept="image/*" class="w-full search-file-input">
+        <button class="btn btn-accent w-full search-btn" onclick="searchByImage()"><i class="fa-solid fa-camera"></i> Find Face in Database</button>
         <div id="img-search-msg" class="settings-msg"></div>
     </div>
     <div class="card">
-        <div class="card-body" style="padding:0;">
-            <div id="img-results-grid" class="results-grid" style="padding:20px;">
-                 <div class="empty-state" style="grid-column:1/-1;">
+        <div class="card-body card-body-no-padding">
+            <div id="img-results-grid" class="results-grid results-grid-padded">
+                 <div class="empty-state empty-state-full-col">
                     <i class="fa-solid fa-image"></i>
                     <p>Upload a face image to cross-reference with historical detections.</p>
                 </div>
@@ -65,31 +65,31 @@
 
 <!-- Tab 3: Video Full Scan -->
 <div id="vid-search-tab" class="tab-content animate-in">
-    <div class="card" style="margin-bottom:24px;">
+    <div class="card search-card-margin">
         <div class="card-body">
-            <h3 style="margin-bottom:12px;font-size:0.9rem;">1. Select Recordings to Scan</h3>
-            <div style="max-height: 200px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px;" id="vid-select-list">
-                <p style="color:var(--text-dim);font-size:0.8rem;">Loading recordings...</p>
+            <h3 class="scan-section-title">1. Select Recordings to Scan</h3>
+            <div class="vid-select-list" id="vid-select-list">
+                <p class="vid-select-loading">Loading recordings...</p>
             </div>
         </div>
     </div>
     
     <div class="grid-2">
         <div class="section-panel">
-            <h3><i class="fa-solid fa-user" style="color:var(--accent);margin-right:6px;"></i> Scan by Name</h3>
-            <input type="text" id="v-name" placeholder="Target registered name" style="margin-bottom:12px;">
-            <button class="btn btn-accent w-full" style="width:100%;" onclick="vidSearchByName()" id="vid-name-btn">Scan Recordings</button>
+            <h3 class="card-title-with-icon"><i class="fa-solid fa-user icon-accent"></i> Scan by Name</h3>
+            <input type="text" id="v-name" placeholder="Target registered name" class="search-input-margin">
+            <button class="btn btn-accent w-full search-btn" onclick="vidSearchByName()" id="vid-name-btn">Scan Recordings</button>
             <div id="v-name-msg" class="settings-msg"></div>
         </div>
         <div class="section-panel">
-            <h3><i class="fa-solid fa-image" style="color:var(--cyan);margin-right:6px;"></i> Scan by Image</h3>
-            <input type="file" id="v-image" accept="image/*" style="margin-bottom:12px;">
-            <button class="btn btn-accent w-full" style="width:100%;" onclick="vidSearchByImg()" id="vid-img-btn">Scan Recordings</button>
+            <h3 class="card-title-with-icon"><i class="fa-solid fa-image icon-cyan"></i> Scan by Image</h3>
+            <input type="file" id="v-image" accept="image/*" class="search-input-margin">
+            <button class="btn btn-accent w-full search-btn" onclick="vidSearchByImg()" id="vid-img-btn">Scan Recordings</button>
             <div id="v-img-msg" class="settings-msg"></div>
         </div>
     </div>
     
-    <div id="vid-results" style="margin-top:24px;"></div>
+    <div id="vid-results" class="vid-results-margin"></div>
 </div>
 
 {% endblock %}
@@ -108,17 +108,17 @@ function switchTab(id) {
 function renderResults(data, gridId) {
     const grid = document.getElementById(gridId);
     if (!data || !data.length) {
-        grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1;"><i class="fa-solid fa-magnifying-glass-minus"></i><p>No matches found.</p></div>';
+        grid.innerHTML = '<div class="empty-state empty-state-full-col"><i class="fa-solid fa-magnifying-glass-minus"></i><p>No matches found.</p></div>';
         return;
     }
     window.lastSearchData = data; // Store globally for lightbox
     grid.innerHTML = data.map((r, idx) => `
-        <div class="detection-card animate-in" onclick="openLightbox(${idx}, window.lastSearchData)" style="cursor:pointer">
+        <div class="detection-card animate-in detection-card-clickable" onclick="openLightbox(${idx}, window.lastSearchData)">
             <img src="/${r.face_path || r.image_path}" class="detection-image">
             <div class="detection-info">
                 <h4>${r.person_name}</h4>
-                <p><i class="fa-solid fa-video" style="font-size:10px;"></i> ${r.camera_id}</p>
-                <p><i class="fa-regular fa-clock" style="font-size:10px;"></i> ${new Date(r.timestamp + "Z").toLocaleString()}</p>
+                <p class="detection-icon-text"><i class="fa-solid fa-video detection-icon-sm"></i> ${r.camera_id}</p>
+                <p class="detection-icon-text"><i class="fa-regular fa-clock detection-icon-sm"></i> ${new Date((r.timestamp || "").replace(" ", "T") + "Z").toLocaleString()}</p>
             </div>
         </div>
     `).join('');
@@ -135,7 +135,7 @@ async function searchDetections() {
     if(end) query += `end_time=${end}&`;
     
     const grid = document.getElementById('results-grid');
-    grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1;"><i class="fa-solid fa-spinner fa-spin"></i><p>Searching...</p></div>';
+    grid.innerHTML = '<div class="empty-state empty-state-full-col"><i class="fa-solid fa-spinner fa-spin"></i><p>Searching...</p></div>';
     
     try {
         const res = await fetch('/api/search' + query);
@@ -173,11 +173,11 @@ async function loadVidOptions() {
     const data = await res.json();
     const list = document.getElementById('vid-select-list');
     if(!data.length) {
-        list.innerHTML = '<p style="color:var(--text-dim);font-size:0.8rem;">No existing recordings found.</p>';
+        list.innerHTML = '<p class="vid-select-empty">No existing recordings found.</p>';
         return;
     }
     list.innerHTML = data.map(r => `
-        <label style="display:block; margin-bottom:5px; font-size:0.8rem; cursor:pointer;">
+        <label class="vid-select-label">
             <input type="checkbox" name="vids" value="${r.id}" class="vid-cb"> 
             ${r.camera_id} (${r.start_time.split('.')[0]}) - ${r.file_path.split('/').pop()}
         </label>
@@ -195,13 +195,13 @@ function renderVidResults(data) {
             <div class="detection-card">
                 <div class="card-body">
                     <h4>${r.person_name}</h4>
-                    <p style="font-size:0.75rem;color:var(--text-muted);">
+                    <p class="vid-result-meta">
                         <i class="fa-solid fa-video"></i> ${r.camera_id}<br>
                         <i class="fa-regular fa-file-video"></i> ${r.video_name}<br>
                         <i class="fa-regular fa-clock"></i> ${r.start_timestamp} - ${r.end_timestamp}<br>
                         <i class="fa-solid fa-crosshairs"></i> ${(r.confidence*100).toFixed(1)}% Match
                     </p>
-                    <a href="/${r.video_path}#t=${r.start_seconds}" target="_blank" class="btn btn-ghost btn-sm mt-2" style="width:100%;"><i class="fa-solid fa-play"></i> View Segment</a>
+                    <a href="/${r.video_path}#t=${r.start_seconds}" target="_blank" class="btn btn-ghost btn-sm mt-2 w-full"><i class="fa-solid fa-play"></i> View Segment</a>
                 </div>
             </div>
         `;

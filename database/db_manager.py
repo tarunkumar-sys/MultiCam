@@ -2,6 +2,7 @@ import sqlite3
 import os
 import hashlib
 import time
+import json
 
 class DatabaseManager:
     def __init__(self, db_path='database/system.db'):
@@ -155,8 +156,6 @@ class DatabaseManager:
 
     def cleanup_old_logs(self):
         """Delete logs older than 24 hours and their snapshot files."""
-        import os
-        import json
         with self.get_connection() as conn:
             cursor = conn.cursor()
             # Get old snapshot paths before deleting
@@ -188,8 +187,6 @@ class DatabaseManager:
 
     def clear_all_logs(self):
         """Wipe all detection logs and their snapshot files immediately."""
-        import os
-        import json
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT snapshot_path FROM detection_logs')

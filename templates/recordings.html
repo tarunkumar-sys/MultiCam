@@ -8,10 +8,10 @@
         <h1>Recordings</h1>
         <p class="subtitle">Review and manage saved video captures</p>
     </div>
-    <div class="filter-bar" style="margin-bottom:0;">
-        <div class="form-group flex items-center gap-sm">
+    <div class="filter-bar recordings-filter-bar">
+        <div class="form-group recordings-filter-group">
             <input type="date" id="rec-date">
-            <input type="text" id="rec-cam" placeholder="Camera ID" style="max-width:140px;">
+            <input type="text" id="rec-cam" placeholder="Camera ID" class="rec-cam-input">
             <button class="btn btn-ghost btn-sm" onclick="fetchRecordings()">Filter</button>
             <button class="btn btn-ghost btn-sm" onclick="clearFilters()" title="Clear Filters"><i class="fa-solid fa-rotate-right"></i></button>
         </div>
@@ -25,7 +25,7 @@
 <!-- Video Modal -->
 <div class="video-modal" id="video-modal">
     <div class="video-modal-content">
-        <button class="modal-close" style="position:absolute;top:10px;right:10px;z-index:10;color:#fff;" onclick="closeVideo()"><i class="fa-solid fa-xmark"></i></button>
+        <button class="modal-close video-modal-close" onclick="closeVideo()"><i class="fa-solid fa-xmark"></i></button>
         <video id="video-player" controls preload="metadata"></video>
     </div>
 </div>
@@ -43,7 +43,7 @@ async function deleteRecording(id) {
 
 async function fetchRecordings() {
     const grid = document.getElementById('rec-grid');
-    grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1;"><i class="fa-solid fa-spinner fa-spin"></i><p>Loading...</p></div>';
+    grid.innerHTML = '<div class="empty-state empty-state-full-col"><i class="fa-solid fa-spinner fa-spin"></i><p>Loading...</p></div>';
     
     const cam = document.getElementById('rec-cam').value;
     const date = document.getElementById('rec-date').value;
@@ -59,23 +59,23 @@ async function fetchRecordings() {
         const data = await res.json();
         
         if (!data.length) {
-            grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1;"><i class="fa-solid fa-film"></i><p>No recordings found.</p></div>';
+            grid.innerHTML = '<div class="empty-state empty-state-full-col"><i class="fa-solid fa-film"></i><p>No recordings found.</p></div>';
             return;
         }
         
         grid.innerHTML = data.map((rec, i) => `
-            <div class="rec-card animate-in" style="animation-delay:${i * 0.05}s">
+            <div class="rec-card animate-in" data-delay="${i * 0.05}">
                 <div class="rec-thumb" onclick="playVideo('${rec.file_path}')">
                     <video src="/${rec.file_path}#t=0.5" muted preload="metadata"></video>
                     <div class="rec-play-overlay"><i class="fa-solid fa-play"></i></div>
                 </div>
                 <div class="rec-info">
-                    <h4><i class="fa-solid fa-video" style="color:var(--text-dim);font-size:12px;margin-right:6px;"></i> ${rec.camera_id}</h4>
-                    <p><i class="fa-regular fa-clock" style="width:14px;text-align:center;"></i> ${rec.start_time.split('.')[0]}</p>
-                    <p><i class="fa-solid fa-hourglass-end" style="width:14px;text-align:center;"></i> ${rec.end_time ? rec.end_time.split('.')[0] : 'Processing...'}</p>
+                    <h4 class="rec-camera-title"><i class="fa-solid fa-video rec-icon"></i> ${rec.camera_id}</h4>
+                    <p class="rec-time-info"><i class="fa-regular fa-clock rec-time-icon"></i> ${rec.start_time.split('.')[0]}</p>
+                    <p class="rec-time-info"><i class="fa-solid fa-hourglass-end rec-time-icon"></i> ${rec.end_time ? rec.end_time.split('.')[0] : 'Processing...'}</p>
                     <div class="rec-actions">
                         <button class="btn btn-ghost btn-sm flex-1" onclick="playVideo('${rec.file_path}')">Play</button>
-                        <button class="btn btn-ghost btn-sm" onclick="deleteRecording(${rec.id})" style="color:var(--danger);"><i class="fa-solid fa-trash"></i></button>
+                        <button class="btn btn-ghost btn-sm rec-delete-btn" onclick="deleteRecording(${rec.id})"><i class="fa-solid fa-trash"></i></button>
                     </div>
                 </div>
             </div>

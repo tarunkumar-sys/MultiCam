@@ -26,16 +26,16 @@
 {% else %}
 <div class="feed-grid">
     {% for cam in cameras %}
-    <div class="card animate-in" style="animation-delay: {{ loop.index0 * 0.08 }}s">
+    <div class="card animate-in" data-delay="{{ loop.index0 * 0.08 }}">
         <div class="card-header">
             <h3>{{ cam }}</h3>
             <div class="flex gap-sm items-center">
                 <span class="live-indicator">Live</span>
-                <button class="btn btn-ghost btn-sm" onclick="toggleRec('{{ cam }}')" id="rec-btn-{{ cam }}"><i class="fa-solid fa-circle" style="color:var(--danger);font-size:8px;"></i> Rec</button>
+                <button class="btn btn-ghost btn-sm rec-btn" onclick="toggleRec('{{ cam }}')" id="rec-btn-{{ cam }}"><i class="fa-solid fa-circle rec-icon-dot"></i> Rec</button>
             </div>
         </div>
-        <div class="card-body" style="padding:0;">
-            <img src="/video_feed/{{ cam }}" alt="Feed {{ cam }}" loading="lazy" style="width:100%; display:block; aspect-ratio: 16/9; object-fit: cover;">
+        <div class="card-body card-body-no-padding">
+            <img src="/video_feed/{{ cam }}" alt="Feed {{ cam }}" loading="lazy" class="feed-img">
         </div>
     </div>
     {% endfor %}
@@ -55,11 +55,11 @@ async function toggleRec(camId) {
         if (data.recording) {
             btn.classList.add('btn-accent');
             btn.classList.remove('btn-ghost');
-            btn.innerHTML = '<i class="fa-solid fa-stop" style="font-size:8px;margin-right:4px;"></i> Stop';
+            btn.innerHTML = '<i class="fa-solid fa-stop rec-icon-stop"></i> Stop';
         } else {
             btn.classList.remove('btn-accent');
             btn.classList.add('btn-ghost');
-            btn.innerHTML = '<i class="fa-solid fa-circle" style="color:var(--danger);font-size:8px;margin-right:4px;"></i> Rec';
+            btn.innerHTML = '<i class="fa-solid fa-circle rec-icon-dot"></i> Rec';
         }
     } catch(e) { console.error(e); }
 }
@@ -71,7 +71,7 @@ fetch('/api/recording_status').then(r=>r.json()).then(data => {
         if (btn) {
             btn.classList.add('btn-accent');
             btn.classList.remove('btn-ghost');
-            btn.innerHTML = '<i class="fa-solid fa-stop" style="font-size:8px;margin-right:4px;"></i> Stop';
+            btn.innerHTML = '<i class="fa-solid fa-stop rec-icon-stop"></i> Stop';
         }
     });
 });

@@ -10,7 +10,7 @@
     </div>
     <div class="filter-bar">
         <div class="search-box">
-            <input type="text" placeholder=" Search..." oninput="handleSearch()">
+            <input type="text" id="log-search" placeholder=" Search..." oninput="handleSearch()">
         </div>
         <button class="btn btn-ghost" onclick="loadLogs()"><i class="fa-solid fa-rotate-right"></i> Refresh
             Logs</button>
@@ -69,7 +69,7 @@
         const filtered = window.lastLogsData.filter(log => {
             if (!query) return true;
 
-            const date = new Date(log.timestamp + "Z");
+            const date = new Date((log.timestamp || "").replace(" ", "T") + "Z");
             const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
             const dateStr = date.toLocaleDateString();
             const name = (log.person_name || 'Unknown').toLowerCase();
@@ -82,7 +82,7 @@
                 dateStr.toLowerCase().includes(query);
         });
 
-        header.innerHTML = `<i class="fa-solid fa-list-ol" style="color:var(--text-dim);margin-right:6px;"></i> ${filtered.length} ${query ? 'Matches' : 'Recent Events'}`;
+        header.innerHTML = `<i class="fa-solid fa-list-ol log-list-icon"></i> ${filtered.length} ${query ? 'Matches' : 'Recent Events'}`;
 
         if (!filtered.length) {
             container.innerHTML = `
@@ -94,23 +94,23 @@
         }
 
         container.innerHTML = filtered.map((log, idx) => {
-            const date = new Date(log.timestamp + "Z");
+            const date = new Date((log.timestamp || "").replace(" ", "T") + "Z");
             const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
             const dateStr = date.toLocaleDateString();
             const knownClass = log.is_known ? 'known' : '';
-            const icon = log.is_known ? '<i class="fa-solid fa-user-check" style="color:var(--success);font-size:10px;"></i>' : '<i class="fa-solid fa-user-secret" style="color:var(--warning);font-size:10px;"></i>';
+            const icon = log.is_known ? '<i class="fa-solid fa-user-check log-icon-success"></i>' : '<i class="fa-solid fa-user-secret log-icon-warning"></i>';
             const name = log.person_name || 'Unknown';
             const thumb = log.face_path || log.snapshot_path;
 
             // We pass filtered to lightbox so navigation works within search results
             return `
-        <div class="log-entry animate-in" onclick="openLightbox(${idx}, window.currentFilteredLogs)" style="cursor:pointer" data-id="${log.id}">
+        <div class="log-entry animate-in log-entry-clickable" onclick="openLightbox(${idx}, window.currentFilteredLogs)" data-id="${log.id}">
             <img src="/${thumb}" alt="Snap" class="log-snap" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9IiMxZDFkMjMiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZmlsbD0iIzNmM2Y0NiIgZHk9Ii4zZW0iIHRleHQtYW5jaG9yPSJtaWRkbGUiPj9fPjwvdGV4dD48L3N2Zz4='">
             <div class="log-info">
                 <div class="log-name ${knownClass}">${icon} ${name}</div>
                 <div class="log-meta">
-                    <span><i class="fa-solid fa-video" style="font-size:9px;"></i> ${log.camera_id}</span>
-                    <span><i class="fa-regular fa-calendar" style="font-size:9px;"></i> ${dateStr}</span>
+                    <span class="log-meta-item"><i class="fa-solid fa-video log-meta-icon"></i> ${log.camera_id}</span>
+                    <span class="log-meta-item"><i class="fa-regular fa-calendar log-meta-icon"></i> ${dateStr}</span>
                 </div>
             </div>
             <div class="log-time">${timeStr}</div>

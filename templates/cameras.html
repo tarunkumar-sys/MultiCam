@@ -13,7 +13,7 @@
 <div class="two-col">
     <!-- Left: Add Camera Form -->
     <div class="section-panel animate-in">
-        <h3><i class="fa-solid fa-plus" style="color:var(--accent);margin-right:6px;font-size:13px;"></i> Add Camera</h3>
+        <h3 class="card-title-with-icon"><i class="fa-solid fa-plus icon-accent camera-icon-sm"></i> Add Camera</h3>
         <form id="add-camera-form">
             <div class="form-group">
                 <label>Camera ID</label>
@@ -32,17 +32,17 @@
                 <label id="source-label">Source</label>
                 <input type="text" name="source" id="cam-source" placeholder="0 (webcam index)" required>
             </div>
-            <button type="submit" class="btn btn-accent" style="width:100%;">
+            <button type="submit" class="btn btn-accent w-full">
                 <i class="fa-solid fa-plus"></i> Add Camera
             </button>
-            <div id="cam-msg" style="margin-top:12px;font-size:0.8rem;text-align:center;min-height:20px;"></div>
+            <div id="cam-msg" class="cam-msg"></div>
         </form>
     </div>
 
     <!-- Right: Active Cameras List -->
     <div>
-        <div class="section-panel animate-in" style="animation-delay:0.1s">
-            <h3><i class="fa-solid fa-signal" style="color:var(--success);margin-right:6px;font-size:13px;"></i> Active Cameras</h3>
+        <div class="section-panel animate-in camera-list-delay">
+            <h3 class="card-title-with-icon"><i class="fa-solid fa-signal icon-success camera-icon-sm"></i> Active Cameras</h3>
             <div id="camera-list" class="cam-list">
                 <div class="empty-state"><i class="fa-solid fa-video-slash"></i><p>No cameras connected</p></div>
             </div>
@@ -111,8 +111,8 @@ async function loadCameras() {
                 <div class="cam-item-info">
                     <div class="cam-status ${statusClass}"></div>
                     <div>
-                        <strong style="font-size:0.85rem;color:${isActive ? 'var(--text)' : 'var(--text-dim)'};">${cam.id}</strong>
-                        <div style="font-size:10px; color:var(--text-dim);">${cam.source}</div>
+                        <strong class="cam-item-name" data-active="${isActive}">${cam.id}</strong>
+                        <div class="cam-item-source">${cam.source}</div>
                     </div>
                 </div>
                 <div class="cam-item-actions">
@@ -266,21 +266,21 @@ async function deleteCam(camId) {
 loadCameras();
 </script>
 
-<div class="modal-overlay" id="roi-overlay" style="display:none; z-index: 1000;">
-    <div class="modal-card" style="max-width: 900px; width: 95%;">
+<div class="modal-overlay roi-overlay" id="roi-overlay">
+    <div class="modal-card roi-modal-card">
         <div class="modal-header">
             <h3>Detection ROI — <span id="roi-cam-name"></span></h3>
             <button class="modal-close" onclick="closeRoiModal()"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div class="modal-body">
             <p class="modal-hint">Click on the image to draw a polygon. Detection will only occur inside this region.</p>
-            <div style="position:relative; background: #000; border-radius: 8px; overflow: hidden; margin: 15px 0;">
-                <img id="roi-stream" style="width:100%; display:block;" src="">
-                <canvas id="roi-canvas" style="position:absolute; top:0; left:0; width:100%; height:100%; cursor:crosshair;" onclick="handleCanvasClick(event)"></canvas>
+            <div class="roi-stream-container">
+                <img id="roi-stream" class="roi-stream-img" src="">
+                <canvas id="roi-canvas" class="roi-canvas" onclick="handleCanvasClick(event)"></canvas>
             </div>
-            <div class="modal-actions" style="margin-top: 20px;">
+            <div class="modal-actions roi-modal-actions">
                 <button class="btn btn-ghost" onclick="clearRoi()"><i class="fa-solid fa-eraser"></i> Clear Points</button>
-                <div style="flex-grow: 1;"></div>
+                <div class="modal-actions-spacer"></div>
                 <button class="btn btn-ghost" onclick="closeRoiModal()">Cancel</button>
                 <button class="btn btn-accent" onclick="saveRoi()"><i class="fa-solid fa-check"></i> Save Region</button>
             </div>

@@ -69,6 +69,7 @@ os.makedirs("dataset", exist_ok=True)
 os.makedirs("recordings", exist_ok=True)
 
 app = FastAPI()
+
 app.mount("/static", StaticFiles(directory="static"), name="static")
 app.mount("/snapshots", StaticFiles(directory="snapshots"), name="snapshots")
 app.mount("/dataset", StaticFiles(directory="dataset"), name="dataset")
@@ -629,12 +630,7 @@ async def toggle_camera(camera_id: str = Form(...)):
 async def api_cameras_info():
     return camera_manager.get_all_cameras_info()
 
-@app.post("/toggle_camera")
-async def toggle_camera(camera_id: str = Form(...)):
-    success, is_active = camera_manager.toggle_camera(camera_id)
-    if success:
-        return {"status": "success", "active": is_active}
-    return {"status": "error"}
+
 
 @app.get("/api/occupancy")
 async def api_occupancy(camera_id: Optional[str] = None, start_time: Optional[str] = None, end_time: Optional[str] = None):
@@ -919,7 +915,6 @@ async def api_persons():
 # Video Person Search API
 # ---------------------------------------------------------------------------
 
-import json
 from fastapi import BackgroundTasks
 import torch
 
@@ -1112,4 +1107,5 @@ async def api_analytics_identity(camera_id: Optional[str] = None, hours: int = 2
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    
+    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=False)

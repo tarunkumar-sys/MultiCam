@@ -54,7 +54,7 @@
             <button class="sb-link" title="Alerts" onclick="toggleAlertPanel()">
                 <i class="fa-solid fa-bell"></i>
                 <span class="sb-label">Alerts</span>
-                <span class="alert-badge" id="alert-badge" style="display:none;">0</span>
+                <span class="alert-badge alert-badge-hidden" id="alert-badge">0</span>
             </button>
             <button class="sb-link" title="Settings" onclick="openSettings()">
                 <i class="fa-solid fa-gear"></i>
@@ -115,7 +115,7 @@
                     <div id="settings-msg" class="settings-msg"></div>
                 </form>
                 <div class="form-divider"></div>
-                <button class="btn btn-danger-outline" onclick="logout()" style="width:100%;">
+                <button class="btn btn-danger-outline w-full" onclick="logout()">
                     Log Out
                 </button>
             </div>
@@ -127,11 +127,11 @@
         <div class="lightbox-content">
             <div class="lightbox-image-container">
                 <div class="flex-col items-center gap-sm">
-                    <span style="font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:1px;">Full Frame</span>
+                    <span class="lightbox-label">Full Frame</span>
                     <img id="lightbox-full-img" class="lightbox-main-img" src="" alt="Full Snapshot">
                 </div>
                 <div class="flex-col items-center gap-sm">
-                    <span style="font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:1px;">Face Detection</span>
+                    <span class="lightbox-label">Face Detection</span>
                     <img id="lightbox-face-img" class="lightbox-side-img" src="" alt="Face Crop">
                 </div>
             </div>
