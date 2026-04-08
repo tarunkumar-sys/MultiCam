@@ -976,17 +976,18 @@ def self_recognition_worker(frame, face_box, track_id, recognition_cache, frame_
                         timestamp=now_ist
                     )
                     
-                    # 3. Broadcast Live Notification
+                    # 3. Broadcast ONLY for registered/known persons — not every unknown
                     try:
-                        thumb_url = f"/api/target_thumbnail/{global_id}" if "U-" in str(global_id) else f"https://ui-avatars.com/api/?name={str(global_id)}"
-                        
-                        notification_manager.broadcast({
-                            "type": "detection",
-                            "camera": camera_id,
-                            "target": str(global_id),
-                            "thumbnail": thumb_url,
-                            "time": now_ist.strftime("%I:%M %p")
-                        })
+                        is_registered = "U-" not in str(global_id)
+                        if is_registered:
+                            thumb_url = f"https://ui-avatars.com/api/?name={str(global_id)}&background=e8192c&color=fff"
+                            notification_manager.broadcast({
+                                "type": "registered_person",
+                                "camera": camera_id,
+                                "target": str(global_id),
+                                "thumbnail": thumb_url,
+                                "time": now_ist.strftime("%I:%M %p")
+                            })
                     except Exception: pass
                     
                     print(f"[Global Re-ID] Linked {camera_id}:{track_id} -> {global_id}")
