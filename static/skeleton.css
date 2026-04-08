@@ -1,0 +1,185 @@
+/* ============================================================
+   BONEYARD SKELETON SCREENS — AI Vigilance
+   Shared skeleton CSS for all pages
+   ============================================================ */
+
+/* ── Core shimmer keyframe ── */
+@keyframes boneyard-shimmer {
+    0%   { background-position: -600px 0; }
+    100% { background-position: 600px 0; }
+}
+
+@keyframes boneyard-pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.45; }
+}
+
+/* ── Base bone element ── */
+.bone {
+    display: inline-block;
+    border-radius: 6px;
+    background: linear-gradient(
+        90deg,
+        var(--skeleton-base, #e0e0e0) 25%,
+        var(--skeleton-shine, #f0f0f0) 50%,
+        var(--skeleton-base, #e0e0e0) 75%
+    );
+    background-size: 600px 100%;
+    animation: boneyard-shimmer 1.5s infinite linear;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Dark theme overrides */
+[data-theme="dark"] .bone {
+    --skeleton-base:  #2a2a2a;
+    --skeleton-shine: #3a3a3a;
+}
+
+/* ── Bone shape modifiers ── */
+.bone-circle  { border-radius: 50%; }
+.bone-rounded { border-radius: 20px; }
+.bone-square  { border-radius: 4px; }
+
+/* ── Common preset sizes ── */
+.bone-text-sm   { height: 12px; width: 80px; }
+.bone-text-md   { height: 14px; width: 140px; }
+.bone-text-lg   { height: 18px; width: 200px; }
+.bone-text-xl   { height: 28px; width: 120px; }
+.bone-text-full { height: 14px; width: 100%; }
+.bone-avatar    { width: 40px;  height: 40px; border-radius: 10px; }
+.bone-thumb     { width: 48px;  height: 48px; border-radius: 50%; }
+.bone-card-img  { width: 100%;  height: 160px; border-radius: 8px; }
+.bone-icon      { width: 32px;  height: 32px; border-radius: 8px; }
+.bone-btn       { height: 34px; width: 90px;  border-radius: 6px; }
+.bone-chart     { width: 100%;  height: 350px; border-radius: 10px; }
+.bone-stat      { height: 40px; width: 80px; }
+.bone-badge     { height: 22px; width: 88px;  border-radius: 12px; }
+.bone-row       { height: 44px; width: 100%;  border-radius: 6px;  margin-bottom: 2px; }
+
+/* ── Skeleton container helpers ── */
+.skeleton-block {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+}
+
+.skeleton-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+}
+
+/* ── Page-level overlay skeleton (full-page initial load) ── */
+.skeleton-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 50;
+    background: var(--bg-secondary, #f4f5f7);
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    pointer-events: none;
+    transition: opacity 0.4s ease;
+}
+.skeleton-overlay.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* ── Metric card skeleton ── */
+.skeleton-metric {
+    background: var(--bg-panel, #fff);
+    border-radius: 8px;
+    padding: 20px;
+    border-left: 4px solid var(--skeleton-base, #e0e0e0);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    box-shadow: var(--shadow, 0 2px 10px rgba(0,0,0,0.05));
+}
+
+/* ── Table row skeleton ── */
+.skeleton-table-row {
+    display: flex;
+    align-items: center;
+    padding: 12px 15px;
+    gap: 15px;
+    border-bottom: 1px solid var(--border-color, #eee);
+}
+.skeleton-table-row:last-child { border-bottom: none; }
+
+/* ── Activity feed item skeleton ── */
+.skeleton-feed-item {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-color, #eee);
+}
+.skeleton-feed-item:last-child { border-bottom: none; }
+
+/* ── Camera card skeleton ── */
+.skeleton-camera-card {
+    background: var(--bg-panel, #fff);
+    border-radius: 8px;
+    border: 1px solid var(--border-color, #eee);
+    overflow: hidden;
+    box-shadow: var(--shadow, 0 2px 10px rgba(0,0,0,0.05));
+}
+
+/* ── Chart skeleton ── */
+.skeleton-chart-card {
+    background: var(--bg-panel, #fff);
+    border-radius: 16px;
+    border: 1px solid var(--border-color, #eee);
+    padding: 24px;
+    box-shadow: var(--shadow, 0 2px 10px rgba(0,0,0,0.05));
+}
+.skeleton-chart-card .bone-chart {
+    margin-top: 16px;
+}
+
+/* ── People / registry card skeleton ── */
+.skeleton-person-card {
+    background: var(--bg-panel, #fff);
+    border-radius: 10px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    border: 1px solid var(--border-color, #eee);
+    box-shadow: var(--shadow);
+}
+
+/* ── Grid layouts ── */
+.skeleton-grid-4 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 20px;
+}
+.skeleton-grid-2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 24px;
+}
+.skeleton-grid-3 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+}
+
+/* ── Fade-out when data loads ── */
+.skeleton-wrapper {
+    position: relative;
+}
+.skeleton-wrapper .skeleton-content {
+    transition: opacity 0.3s ease, height 0.3s ease;
+}
+.skeleton-wrapper .skeleton-content.loaded {
+    display: none;
+}

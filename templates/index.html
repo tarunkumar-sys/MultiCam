@@ -1,0 +1,1272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Vigilance - Live View</title>
+    <style>
+        :root {
+            --bg-primary: #f0f0f0;
+            --bg-secondary: #f4f5f7;
+            --bg-panel: #ffffff;
+            --text-primary: #333333;
+            --text-secondary: #666666;
+            --border-color: #dddddd;
+            --sidebar-bg: #2d2d2d;
+            --sidebar-active: #3a3a3a;
+            --accent: #c41e3a;
+            --accent-hover: #a01830;
+            --shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+
+        [data-theme="dark"] {
+            --bg-primary: #121212;
+            --bg-secondary: #1e1e1e;
+            --bg-panel: #252525;
+            --text-primary: #e0e0e0;
+            --text-secondary: #aaaaaa;
+            --border-color: #333333;
+            --sidebar-bg: #1a1a1a;
+            --sidebar-active: #2d2d2d;
+            --shadow: 0 4px 20px rgba(0,0,0,0.4);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            background: var(--bg-primary); 
+            color: var(--text-primary);
+            height: 100vh;
+            overflow: hidden;
+            transition: background 0.3s, color 0.3s;
+        }
+    </style>
+
+    <script>
+        (function() {
+            const theme = localStorage.getItem('theme') || 'light';
+            document.documentElement.setAttribute('data-theme', theme);
+        })();
+    </script>
+
+    <style>
+        /* Main Layout - No Header */
+        .app-container {
+            display: flex;
+            height: 100vh;
+        }
+        /* Unified Sidebar Styles */
+        .sidebar {
+            width: 260px;
+            background: var(--sidebar-bg);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            z-index: 100;
+            overflow-y: auto;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .sidebar-header {
+            padding: 20px;
+            background: var(--accent);
+            color: #fff;
+            font-size: 18px;
+            font-weight: 800;
+            letter-spacing: 1px;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .sidebar-info {
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: rgba(0,0,0,0.05);
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .user-avatar {
+            width: 40px; height: 40px;
+            background: var(--accent);
+            border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            color: #fff; font-weight: bold; font-size: 18px;
+        }
+        .user-details { overflow: hidden; }
+        .user-name { font-size: 14px; font-weight: 600; color: #fff; white-space: nowrap; text-overflow: ellipsis; }
+        .user-role { font-size: 11px; color: #aaa; text-transform: uppercase; }
+
+        .sidebar-section { border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .sidebar-title {
+            padding: 15px 20px 8px 20px;
+            color: #888;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 700;
+        }
+        .sidebar-menu { list-style: none; padding-bottom: 10px; }
+        .sidebar-menu li a {
+            display: flex;
+            align-items: center;
+            padding: 12px 20px;
+            color: #bbb;
+            text-decoration: none;
+            font-size: 13px;
+            transition: all 0.2s;
+            border-left: 4px solid transparent;
+        }
+        .sidebar-menu li a:hover {
+            background: rgba(255,255,255,0.05);
+            color: #fff;
+        }
+        .sidebar-menu li a.active {
+            background: rgba(196, 30, 58, 0.1);
+            color: #fff;
+            border-left-color: var(--accent);
+            font-weight: 600;
+        }
+        .sidebar-footer {
+            margin-top: auto;
+            padding: 20px;
+            background: rgba(0,0,0,0.1);
+            border-top: 1px solid rgba(255,255,255,0.05);
+        }
+        .theme-toggle-container {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 15px;
+        }
+        .theme-label { color: #888; font-size: 12px; font-weight: 600; }
+        .theme-switch { position: relative; display: inline-block; width: 40px; height: 20px; }
+        .theme-switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #444; transition: .4s; border-radius: 20px; }
+        .slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: var(--accent); }
+        input:checked + .slider:before { transform: translateX(20px); }
+
+        .logout-btn-side {
+            width: 100%;
+            padding: 12px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: #ef4444;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            transition: all 0.2s;
+        }
+        .logout-btn-side:hover {
+            background: rgba(239, 68, 68, 0.1);
+            border-color: #ef4444;
+            color: #fff;
+        }
+
+        /* Real-time Toast Alerts */
+        .toast-container { position: fixed; bottom: 24px; right: 24px; display: flex; flex-direction: column; gap: 12px; z-index: 10000; pointer-events: none; }
+        .toast { width: 300px; background: var(--bg-panel); border-radius: 10px; box-shadow: var(--shadow); border: 1px solid var(--border-color); padding: 12px; display: flex; gap: 10px; align-items: center; transform: translateX(400px); transition: transform 0.5s; pointer-events: auto; }
+        .toast.active { transform: translateX(0); }
+        .toast-thumb { width: 44px; height: 44px; border-radius: 6px; object-fit: cover; border: 2px solid var(--accent); }
+        .toast-content { flex: 1; }
+        .toast-title { font-weight: 700; font-size: 13px; color: var(--text-primary); }
+        .toast-meta { font-size: 10px; color: var(--text-secondary); display: block; }
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: var(--bg-primary);
+            transition: background 0.3s;
+        }
+        .toolbar {
+            background: var(--bg-panel);
+            padding: 12px 20px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex; justify-content: space-between; align-items: center;
+            transition: background 0.3s;
+        }
+        .toolbar-title { font-size: 16px; font-weight: 600; color: var(--text-primary); }
+        #live-clock { color: var(--text-secondary); margin-right: 20px; font-weight: bold; }
+
+        .content {
+            flex: 1; display: flex;
+            background: var(--bg-secondary);
+            overflow: hidden;
+            transition: background 0.3s;
+        }
+        
+        .main-view { flex: 1; padding: 20px; overflow-y: auto; }
+        .camera-card {
+            background: var(--bg-panel);
+            border-radius: 12px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+            transition: background 0.3s, box-shadow 0.3s;
+        }
+        .camera-header {
+            padding: 10px 15px;
+            background: var(--bg-panel);
+            border-bottom: 1px solid var(--border-color);
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .camera-name { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+        .camera-actions {
+            display: flex; background: var(--bg-panel);
+            border-top: 1px solid var(--border-color);
+        }
+        .cam-action-btn {
+            background: var(--bg-panel);
+            color: var(--text-primary);
+            border: none; border-right: 1px solid var(--border-color);
+            padding: 8px 4px; flex: 1; font-size: 11px;
+            cursor: pointer; transition: background 0.2s;
+        }
+        .cam-action-btn:hover { background: var(--bg-secondary); }
+
+        /* Face Sidebar */
+        .face-sidebar {
+            width: 280px; background: var(--bg-panel);
+            border-left: 1px solid var(--border-color);
+            display: flex; flex-direction: column;
+            transition: background 0.3s, border-color 0.3s;
+        }
+        .face-sidebar-header {
+            padding: 15px; background: var(--bg-panel);
+            border-bottom: 1px solid var(--border-color);
+            font-size: 12px; font-weight: 700; color: var(--text-secondary);
+            display: flex; justify-content: space-between;
+        }
+        .face-card {
+            background: var(--bg-panel);
+            margin: 10px 15px; border-radius: 8px;
+            border: 1px solid var(--border-color);
+            transition: transform 0.2s, background 0.3s;
+        }
+        .face-card:hover { transform: translateX(-5px); background: var(--bg-secondary); }
+        .face-name { font-weight: 600; color: var(--text-primary); }
+        .face-time { color: var(--text-secondary); font-size: 11px; }
+
+        .status-bar {
+            background: var(--bg-panel);
+            color: var(--text-secondary);
+            border-top: 1px solid var(--border-color);
+            padding: 8px 20px; font-size: 11px;
+            display: flex; justify-content: space-between;
+        }
+        .btn {
+            padding: 8px 16px; border: 1px solid var(--border-color);
+            background: var(--bg-panel); color: var(--text-primary);
+            font-size: 13px; cursor: pointer; border-radius: 6px;
+            transition: all 0.2s;
+        }
+        .btn:hover { background: var(--bg-secondary); }
+        .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+        .btn-primary:hover { background: var(--accent-hover); }
+
+        .face-card {
+            background: var(--bg-panel); margin: 10px; border-radius: 8px;
+            border: 1px solid var(--border-color);
+            transition: transform 0.2s, background 0.3s;
+        }
+        .face-card:hover { transform: translateX(-5px); background: var(--bg-secondary); }
+        .face-info { flex: 1; min-width: 0; }
+        .face-name { font-weight: 600; font-size: 13px; color: var(--text-primary); }
+        .face-time { font-size: 11px; color: var(--text-secondary); }
+        .face-sidebar-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+        }
+        
+        /* Face Cards */
+        .face-card {
+            background: #f8f8f8;
+            border: 1px solid #eee;
+            border-radius: 5px;
+            margin-bottom: 12px;
+            overflow: hidden;
+            display: flex;
+            gap: 12px;
+            padding: 10px;
+            transition: all 0.2s;
+        }
+        .face-card:hover { border-color: #c41e3a; background: #fff; }
+        .face-crop {
+            width: 60px;
+            height: 72px;
+            object-fit: cover;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+        }
+        .face-info {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .face-name { font-size: 13px; font-weight: 600; color: #333; margin-bottom: 3px; }
+        .face-id { font-size: 11px; color: #888; }
+        .face-tag { 
+            display: inline-block;
+            margin-top: 5px;
+            font-size: 10px;
+            background: #c41e3a;
+            color: #fff;
+            padding: 2px 6px;
+            border-radius: 2px;
+        }
+        
+        .camera-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+            gap: 15px;
+        }
+        .camera-card {
+            background: #fff;
+            border: 1px solid #ddd;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .camera-header {
+            background: #f8f8f8;
+            padding: 10px 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .camera-info h3 {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 3px;
+        }
+        .camera-ip {
+            font-size: 12px;
+            color: #888;
+        }
+        .camera-meta {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .edit-area-btn {
+            background: #e3f2fd;
+            color: #1976d2;
+            padding: 4px 10px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-weight: 500;
+            border: 1px solid #bbdefb;
+            cursor: pointer;
+        }
+        .edit-area-btn:hover {
+            background: #bbdefb;
+        }
+        .count-badge {
+            background: #e3f2fd;
+            color: #1976d2;
+            padding: 4px 10px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-weight: 500;
+            border: 1px solid #bbdefb;
+        }
+        .live-badge {
+            background: #e8f5e9;
+            color: #388e3c;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: 600;
+            border: 1px solid #c8e6c9;
+        }
+        .camera-feed {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 16/9;
+            background: #000;
+            cursor: pointer;
+            overflow: hidden;
+        }
+        .camera-feed img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            background: #000;
+        }
+        .feed-overlay {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 10px 15px;
+            background: linear-gradient(transparent, rgba(0,0,0,0.8));
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            opacity: 0;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 5;
+        }
+        .camera-feed:hover .feed-overlay {
+            opacity: 1;
+        }
+        .overlay-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+        .overlay-bottom {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .recognized-names {
+            color: #4ade80;
+            font-size: 13px;
+            font-weight: 500;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+            max-width: 70%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .feed-controls {
+            display: flex;
+            gap: 6px;
+            background: rgba(0,0,0,0.4);
+            backdrop-filter: blur(8px);
+            padding: 4px;
+            border-radius: 6px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .feed-btn {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: #fff;
+            width: 32px;
+            height: 32px;
+            cursor: pointer;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+        }
+        .feed-btn:hover {
+            background: rgba(255,255,255,0.25);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+        .feed-btn.active-pause {
+            background: #fbbf24;
+            color: #000;
+            border-color: #d97706;
+        }
+        .feed-btn.active-heatmap {
+            background: #ef4444;
+            color: #fff;
+            border-color: #dc2626;
+        }
+        /* Pause Overlay Indicator */
+        .pause-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 48px;
+            color: #fff;
+            opacity: 0;
+            transition: all 0.3s;
+            pointer-events: none;
+            text-shadow: 0 0 20px rgba(0,0,0,0.5);
+            z-index: 10;
+        }
+        .camera-feed.is-paused .pause-indicator {
+            opacity: 1;
+        }
+        .camera-feed.is-paused img {
+            filter: grayscale(0.5) brightness(0.7);
+        }
+        .fullscreen-btn {
+            background: #c41e3a;
+            border: none;
+            padding: 6px 14px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+            color: #fff;
+            font-weight: 500;
+        }
+        .fullscreen-btn:hover {
+            background: #a01830;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 80px 20px;
+            color: #666;
+            background: #fff;
+            border: 1px solid #ddd;
+        }
+        .empty-state h2 {
+            font-size: 18px;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        /* Fullscreen Modal - Clean */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: #000;
+            z-index: 1000;
+        }
+        .modal.active {
+            display: block;
+        }
+        .modal-close-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.7);
+            border: 1px solid rgba(255,255,255,0.3);
+            color: #fff;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 20px;
+            z-index: 1001;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-close-btn:hover {
+            background: rgba(196, 30, 58, 0.9);
+            border-color: #c41e3a;
+        }
+        .modal-ip-overlay {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.7);
+            color: #fff;
+            padding: 8px 16px;
+            font-size: 14px;
+            z-index: 1001;
+            border-radius: 3px;
+        }
+        .modal-body {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 60px 20px 40px 20px;  /* Top, Right, Bottom, Left padding */
+            box-sizing: border-box;
+        }
+        .modal-body img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+        /* Area Editor Overlay */
+        .area-editor-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.3);
+            cursor: crosshair;
+            z-index: 10;
+            display: none;
+        }
+        .area-rect {
+            position: absolute;
+            border: 2px solid #2196f3;
+            background: rgba(33, 150, 243, 0.2);
+            pointer-events: none;
+        }
+        .area-editor-toolbar {
+            position: absolute;
+            top: 60px;
+            left: 20px;
+            display: flex;
+            gap: 10px;
+            z-index: 1002;
+            display: none;
+        }
+        /* Status Bar */
+        .status-bar {
+            background: #fff;
+            padding: 8px 20px;
+            border-top: 1px solid #ddd;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+            color: #666;
+        }
+        .status-left {
+            display: flex;
+            gap: 20px;
+        }
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #4ade80;
+        }
+        .status-dot.warning {
+            background: #fbbf24;
+        }
+        /* Daily 24h Stats Bar */
+        .daily-stats-bar {
+            display: flex;
+            align-items: stretch;
+            background: #1e1e2e;
+            border-top: 2px solid #c41e3a;
+            font-size: 12px;
+        }
+        .stats-segment {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 8px 6px;
+            gap: 3px;
+        }
+        .stats-segment.total {
+            background: rgba(196,30,58,0.12);
+        }
+        .stats-label {
+            color: #aaa;
+            font-size: 10px;
+            letter-spacing: 0.3px;
+            white-space: nowrap;
+        }
+        .stats-value {
+            color: #fff;
+            font-weight: 700;
+            font-size: 13px;
+        }
+        .stats-segment.total .stats-value {
+            color: #f87171;
+        }
+        .stats-divider {
+            width: 1px;
+            background: #333;
+            margin: 6px 0;
+        }
+        /* Camera action buttons */
+        .cam-actions {
+            display: flex;
+            gap: 0;
+            border-top: 1px solid #e0e0e0;
+        }
+        .cam-action-btn {
+            flex: 1;
+            padding: 7px 4px;
+            font-size: 11px;
+            font-weight: 600;
+            border: none;
+            background: #f5f5f5;
+            color: #444;
+            cursor: pointer;
+            transition: background 0.15s;
+            border-right: 1px solid #e0e0e0;
+            letter-spacing: 0.3px;
+        }
+        .cam-action-btn:last-child { border-right: none; }
+        .cam-action-btn:hover { background: #e0e0e0; }
+
+        /* Alert Flashing Effect */
+        .alert-flashing {
+            animation: pulse-red 1s infinite alternate;
+            border: 2px solid #ef4444 !important;
+            box-shadow: 0 0 20px rgba(239, 68, 68, 0.5) !important;
+        }
+        @keyframes pulse-red {
+            from { background-color: #fff; }
+            to { background-color: #fee2e2; }
+        }
+
+        .restricted-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #fff;
+            font-size: 13px;
+            background: rgba(196, 30, 58, 0.2);
+            padding: 5px 12px;
+            border-radius: 4px;
+            border: 1px solid rgba(196, 30, 58, 0.4);
+        }
+        .restricted-toggle input {
+            cursor: pointer;
+            width: 16px;
+            height: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <aside class="sidebar">
+            <div class="sidebar-header">AI VIGILANCE</div>
+            
+            <div class="sidebar-info">
+                <div class="user-avatar">A</div>
+                <div class="user-details">
+                    <div class="user-name">Administrator</div>
+                    <div class="user-role">System Operator</div>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="sidebar-title">Monitoring</div>
+                <ul class="sidebar-menu">
+                    <li><a href="/" id="nav-live">Live Stream</a></li>
+                    <li><a href="/dashboard" id="nav-dashboard">Dashboard</a></li>
+                    <li><a href="/recordings_page" id="nav-recordings">Recordings</a></li>
+                    <li><a href="/detection_logs" id="nav-logs">Detection Logs</a></li>
+                </ul>
+            </div>
+            <div class="sidebar-section">
+                <div class="sidebar-title">Analytics</div>
+                <ul class="sidebar-menu">
+                    <li><a href="/people" id="nav-people">People Registry</a></li>
+                    <li><a href="/search" id="nav-search">Search & Filters</a></li>
+                    <li><a href="/journey" id="nav-journey">Journey Tracking</a></li>
+                    <li><a href="/analytics" id="nav-analytics">Analytics</a></li>
+                    <li><a href="/registered_detections" id="nav-reg-logs">Identity Logs</a></li>
+                </ul>
+            </div>
+            <div class="sidebar-section">
+                <div class="sidebar-title">Operations</div>
+                <ul class="sidebar-menu">
+                    <li><a href="/cameras" id="nav-cameras">Cameras</a></li>
+                    <li><a href="/add_camera" id="nav-add-camera">Add Camera</a></li>
+                </ul>
+            </div>
+            
+            <div class="sidebar-footer">
+                <div class="theme-toggle-container">
+                    <span class="theme-label">Dark Mode</span>
+                    <label class="theme-switch">
+                        <input type="checkbox" id="theme-checkbox" onchange="toggleTheme()">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <button class="logout-btn-side" onclick="location.href='/logout'">
+                    🚪 Logout Session
+                </button>
+            </div>
+        </aside>
+
+        <div class="toast-container" id="toast-container"></div>
+
+        <div class="main-content">
+            <div class="toolbar">
+                <h1 class="toolbar-title">Live View</h1>
+                <div id="live-clock" style="margin-right: 20px; font-weight: bold; color: #555;"></div>
+                <div class="toolbar-actions">
+                    <button class="btn" onclick="refreshFeeds()">Refresh</button>
+                    <button class="btn btn-primary" onclick="location.href='/cameras'">+ Add Camera</button>
+                </div>
+            </div>
+            
+            <div class="content">
+                <div class="main-view">
+                    <div class="camera-grid" id="cameraGrid">
+                        <!-- Skeleton camera cards shown while cameras load -->
+                        <div class="skeleton-camera-card" id="cam-skel-1">
+                            <div class="bone bone-card-img" style="border-radius:0;aspect-ratio:16/9;height:auto;"></div>
+                            <div style="padding:12px;display:flex;flex-direction:column;gap:8px;">
+                                <div class="bone bone-text-md" style="width:55%;"></div>
+                                <div class="bone bone-text-sm" style="width:40%;"></div>
+                            </div>
+                        </div>
+                        <div class="skeleton-camera-card" id="cam-skel-2">
+                            <div class="bone bone-card-img" style="border-radius:0;aspect-ratio:16/9;height:auto;"></div>
+                            <div style="padding:12px;display:flex;flex-direction:column;gap:8px;">
+                                <div class="bone bone-text-md" style="width:65%;"></div>
+                                <div class="bone bone-text-sm" style="width:45%;"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="empty-state" id="emptyState" style="display: none;">
+                        <h2>No Cameras Connected</h2>
+                        <p>Add cameras from the Camera List page to start monitoring</p>
+                        <button class="btn btn-primary" onclick="location.href='/cameras'" style="margin-top: 20px;">Add Camera</button>
+                    </div>
+                </div>
+
+                <div class="face-sidebar">
+                    <div class="face-sidebar-header">
+                        <span>LATEST IDENTITIES</span>
+                        <span style="font-size: 10px; opacity: 0.7;">LIVE</span>
+                    </div>
+                    <div class="face-sidebar-content" id="faceSidebarContent">
+                        <!-- Skeleton while waiting for first detection -->
+                        <div class="skeleton-block" style="gap:10px;padding:4px;" id="face-sidebar-skeleton">
+                            <div class="skeleton-feed-item" style="border-radius:8px;padding:10px;background:var(--bg-panel);border:1px solid var(--border-color);"><div class="bone bone-thumb"></div><div class="skeleton-block" style="flex:1;gap:6px;"><div class="bone bone-square" style="height:13px;width:70%;"></div><div class="bone bone-square" style="height:10px;width:45%;"></div></div></div>
+                            <div class="skeleton-feed-item" style="border-radius:8px;padding:10px;background:var(--bg-panel);border:1px solid var(--border-color);"><div class="bone bone-thumb"></div><div class="skeleton-block" style="flex:1;gap:6px;"><div class="bone bone-square" style="height:13px;width:55%;"></div><div class="bone bone-square" style="height:10px;width:35%;"></div></div></div>
+                            <div class="skeleton-feed-item" style="border-radius:8px;padding:10px;background:var(--bg-panel);border:1px solid var(--border-color);"><div class="bone bone-thumb"></div><div class="skeleton-block" style="flex:1;gap:6px;"><div class="bone bone-square" style="height:13px;width:80%;"></div><div class="bone bone-square" style="height:10px;width:50%;"></div></div></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="status-bar">
+                <div class="status-left">
+                    <div class="status-item">
+                        <span class="status-dot"></span>
+                        <span>System Normal</span>
+                    </div>
+                    <div class="status-item">
+                        <span>Cameras: <span id="camCount">0</span></span>
+                    </div>
+                </div>
+                <div>AI Vigilance v1.0</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fullscreen Modal - Clean with only IP and Close -->
+    <div class="modal" id="fullscreenModal">
+        <div class="modal-ip-overlay" id="modalIpOverlay">Camera IP</div>
+        <button class="modal-close-btn" onclick="closeFullscreen()">&times;</button>
+        <div class="modal-body" id="modalBody">
+            <img id="modalImg" src="" alt="Camera Feed">
+        </div>
+    </div>
+
+    <script>
+        // --- Server-Synced IST Clock ---
+        let _serverOffset = 0; // ms difference between server IST and browser local
+        async function syncServerTime() {
+            try {
+                const t0 = Date.now();
+                const res = await fetch('/api/server_time');
+                const t1 = Date.now();
+                if (res.ok) {
+                    const data = await res.json();
+                    const serverMs = data.timestamp_ms;
+                    const rtt = t1 - t0;
+                    _serverOffset = serverMs - t0 + Math.round(rtt / 2);
+                }
+            } catch(e) { /* silent — keep using last offset */ }
+        }
+        function getServerIST() {
+            const serverMs = Date.now() + _serverOffset;
+            return new Date(serverMs);
+        }
+        function updateLiveClock() {
+            const now = getServerIST();
+            const timeString = now.toLocaleString('en-IN', {
+                timeZone: 'Asia/Kolkata',
+                year: 'numeric', month: 'short', day: '2-digit',
+                hour: '2-digit', minute: '2-digit', second: '2-digit',
+                hour12: true
+            });
+            const clockEl = document.getElementById('live-clock');
+            if (clockEl) {
+                clockEl.textContent = '🕐 ' + timeString + ' IST';
+            }
+        }
+        syncServerTime().then(() => {
+            updateLiveClock();
+            setInterval(updateLiveClock, 1000);
+            setInterval(syncServerTime, 5 * 60 * 1000); // resync every 5 min
+        });
+
+        let cameras = [];
+        let personCounts = {};
+
+        async function loadCameras() {
+            try {
+                const res = await fetch('/api/cameras');
+                cameras = await res.json();
+                document.getElementById('camCount').textContent = cameras.length;
+                if (cameras.length === 0) {
+                    document.getElementById('cameraGrid').innerHTML = '';
+                    document.getElementById('emptyState').style.display = 'block';
+                    document.getElementById('cameraGrid').style.display = 'none';
+                    return;
+                }
+                renderCameras();
+                startUpdates();
+            } catch (err) {
+                console.error('Failed to load cameras:', err);
+            }
+        }
+
+        function renderCameras() {
+            const grid = document.getElementById('cameraGrid');
+            // Clear skeleton cards before rendering real content
+            grid.innerHTML = cameras.map(cam => `
+                <div class="camera-card">
+                    <div class="camera-header">
+                        <div class="camera-info">
+                            <h3>${cam.id}</h3>
+                            <div class="camera-ip">${cam.source || 'Local Camera'}</div>
+                        </div>
+                        <div class="camera-meta">
+                            <span class="count-badge" id="count-${cam.id}">0 persons</span>
+                            <span class="live-badge">LIVE</span>
+                        </div>
+                    </div>
+                    <div class="camera-feed" id="feed-container-${cam.id}" onclick="openFullscreen('${cam.id}')">
+                        <img id="feed-img-${cam.id}" src="/video_feed/${cam.id}" alt="${cam.id}" loading="lazy">
+                        <div class="pause-indicator">⏸</div>
+                        <div class="feed-overlay">
+                            <div class="overlay-top">
+                                <span class="recognized-names" id="rec-${cam.id}"></span>
+                                <div class="feed-controls">
+                                    <button class="feed-btn" id="pause-btn-${cam.id}" 
+                                            onclick="event.stopPropagation(); togglePause('${cam.id}')"
+                                            title="Pause/Play Stream">
+                                        ⏸
+                                    </button>
+                                    <button class="feed-btn" 
+                                            onclick="event.stopPropagation(); takeScreenshot('${cam.id}')"
+                                            title="Take Screenshot">
+                                        📸
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="overlay-bottom">
+                                <div></div> <!-- Spacer -->
+                                <button class="fullscreen-btn" onclick="event.stopPropagation(); openFullscreen('${cam.id}')">
+                                    Full Expand
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Daily 24h Stats Bar -->
+                    <div class="daily-stats-bar" id="stats-${cam.id}">
+                        <div class="stats-segment">
+                            <span class="stats-label">🌅 12AM–12PM</span>
+                            <span class="stats-value" id="am-${cam.id}">–</span>
+                        </div>
+                        <div class="stats-divider"></div>
+                        <div class="stats-segment">
+                            <span class="stats-label">🌆 12PM–12AM</span>
+                            <span class="stats-value" id="pm-${cam.id}">–</span>
+                        </div>
+                        <div class="stats-divider"></div>
+                        <div class="stats-segment total">
+                            <span class="stats-label">📊 24h Total</span>
+                            <span class="stats-value" id="total-${cam.id}">–</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function openFullscreen(camId) {
+            const cam = cameras.find(c => c.id === camId);
+            document.getElementById('modalIpOverlay').textContent = cam?.source || camId;
+            document.getElementById('modalImg').src = `/video_feed/${camId}`;
+            document.getElementById('fullscreenModal').classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeFullscreen() {
+            document.getElementById('fullscreenModal').classList.remove('active');
+            document.getElementById('modalImg').src = '';
+            document.body.style.overflow = '';
+        }
+
+        function refreshFeeds() {
+            const imgs = document.querySelectorAll('.camera-feed img');
+            imgs.forEach(img => {
+                const src = img.src;
+                img.src = src.split('?')[0] + '?t=' + Date.now();
+            });
+        }
+
+        async function updateCounts() {
+            try {
+                const res = await fetch('/api/occupancy');
+                const data = await res.json();
+                
+                Object.entries(data).forEach(([camId, result]) => {
+                    const count = typeof result === 'object' ? result.count : result;
+                    const alertActive = typeof result === 'object' ? result.alert_active : false;
+                    
+                    const badge = document.getElementById(`count-${camId}`);
+                    const card = document.getElementById(`feed-container-${camId}`)?.closest('.camera-card');
+                    
+                    if (badge) badge.textContent = `${count} persons`;
+                    
+                    if (card) {
+                        if (alertActive) {
+                            if (!card.classList.contains('alert-flashing')) {
+                                card.classList.add('alert-flashing');
+                                playAlertSound();
+                            }
+                        } else {
+                            card.classList.remove('alert-flashing');
+                        }
+                    }
+                });
+            } catch (err) { }
+        }
+
+        // Web Audio API Beep
+        let audioCtx = null;
+        function playAlertSound() {
+            try {
+                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(880, audioCtx.currentTime); // A5
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.5);
+            } catch(e) { console.error("Audio error:", e); }
+        }
+
+        async function updateRecognized() {
+            for (const cam of cameras) {
+                try {
+                    const res = await fetch(`/api/recognized/${cam.id}`);
+                    const data = await res.json();
+                    
+                    let names = [];
+                    if (Array.isArray(data)) {
+                        names = data.map(p => p.name);
+                    } else {
+                        names = Object.values(data);
+                    }
+                    
+                    const el = document.getElementById(`rec-${cam.id}`);
+                    if (el) el.textContent = names.length > 0 ? names.join(', ') : '';
+                } catch (err) {
+                    console.error(`Failed to get recognized for ${cam.id}:`, err);
+                }
+            }
+        }
+
+        async function updateFaceSidebar() {
+            const container = document.getElementById('faceSidebarContent');
+            let allPersons = [];
+            
+            for (const cam of cameras) {
+                try {
+                    const res = await fetch(`/api/live_results/${cam.id}`);
+                    const persons = await res.json();
+                    persons.forEach(p => {
+                        p.camera_id = cam.id;
+                    });
+                    allPersons = allPersons.concat(persons);
+                } catch (err) { }
+            }
+
+            // Remove skeleton on first real update
+            const skel = document.getElementById('face-sidebar-skeleton');
+            if (skel) skel.remove();
+            
+            if (allPersons.length === 0) {
+                container.innerHTML = '<div style="text-align: center; color: #888; padding-top: 40px; font-size: 13px;">No persons in frame</div>';
+                return;
+            }
+            
+            // Map persons to HTML
+            container.innerHTML = allPersons.map(p => `
+                <div class="face-card">
+                    <img src="${p.face_crop ? 'data:image/jpeg;base64,' + p.face_crop : 'https://ui-avatars.com/api/?name=User'}" class="face-crop">
+                    <div class="face-info">
+                        <div class="face-name">${p.name || 'Unknown'}</div>
+                        <div class="face-id">Person ID: #${p.id}</div>
+                        <div><span class="face-tag">${p.camera_id}</span></div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function startUpdates() {
+            updateCounts();
+            updateRecognized();
+            updateFaceSidebar();
+            updateDailyStats();
+            setInterval(updateCounts, 2000);
+            setInterval(updateRecognized, 4000);
+            setInterval(updateFaceSidebar, 2000);
+            setInterval(updateDailyStats, 5 * 60 * 1000); // refresh every 5 min
+        }
+
+        async function updateDailyStats() {
+            try {
+                const res = await fetch('/api/camera_daily_stats');
+                const stats = await res.json();
+                Object.entries(stats).forEach(([camId, s]) => {
+                    const amEl    = document.getElementById(`am-${camId}`);
+                    const pmEl    = document.getElementById(`pm-${camId}`);
+                    const totEl   = document.getElementById(`total-${camId}`);
+                    if (amEl)  amEl.textContent  = s.am  + ' persons';
+                    if (pmEl)  pmEl.textContent  = s.pm  + ' persons';
+                    if (totEl) totEl.textContent = s.total + ' persons';
+                });
+            } catch(e) {
+                console.error('Failed to fetch daily stats:', e);
+            }
+        }
+
+        // ---- Pause / Resume ----
+        const pausedCams = new Set();
+        async function togglePause(camId) {
+            const feedImg = document.getElementById(`feed-img-${camId}`);
+            const container = document.getElementById(`feed-container-${camId}`);
+            const btn = document.getElementById(`pause-btn-${camId}`);
+            if (!feedImg) return;
+
+            if (pausedCams.has(camId)) {
+                // Resume
+                pausedCams.delete(camId);
+                container.classList.remove('is-paused');
+                feedImg.src = `/video_feed/${camId}`;
+                btn.textContent = '⏸';
+                btn.classList.remove('active-pause');
+            } else {
+                // Freeze: grab static frame then stop stream
+                pausedCams.add(camId);
+                container.classList.add('is-paused');
+                btn.textContent = '▶';
+                btn.classList.add('active-pause');
+                try {
+                    const snap = await fetch(`/api/capture_frame/${camId}`);
+                    if (snap.ok) {
+                        const blob = await snap.blob();
+                        feedImg.src = URL.createObjectURL(blob);
+                    }
+                } catch(e) { /* keep current frozen frame */ }
+            }
+        }
+
+        async function takeScreenshot(camId) {
+            try {
+                const res = await fetch(`/api/capture_frame/${camId}`);
+                if (res.ok) {
+                    const blob = await res.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `screenshot_${camId}_${new Date().getTime()}.jpg`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                }
+            } catch (err) {
+                console.error('Screenshot failed:', err);
+            }
+        }
+
+
+        // Global Toggles removed per user request
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeFullscreen();
+        });
+
+        document.getElementById('fullscreenModal').addEventListener('click', (e) => {
+            if (e.target === document.getElementById('fullscreenModal') || e.target === document.querySelector('.modal-body')) {
+                closeFullscreen();
+            }
+        });
+
+
+        loadCameras();
+    </script>
+    <script src="/static/skeleton.js"></script>
+    <script>
+        function toggleTheme() {
+            const current = document.documentElement.getAttribute('data-theme');
+            const target = current === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', target);
+            localStorage.setItem('theme', target);
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const theme = localStorage.getItem('theme') || 'light';
+            const checkbox = document.getElementById('theme-checkbox');
+            if (checkbox) checkbox.checked = (theme === 'dark');
+            
+            startNotificationListener();
+            setActiveNav();
+        });
+
+        function setActiveNav() {
+            const currentPath = window.location.pathname;
+            const navMap = {
+                '/dashboard': 'nav-dashboard',
+                '/': 'nav-live',
+                '/recordings_page': 'nav-recordings',
+                '/detection_logs': 'nav-logs',
+                '/people': 'nav-people',
+                '/search': 'nav-search',
+                '/journey': 'nav-journey',
+                '/analytics': 'nav-analytics',
+                '/registered_detections': 'nav-reg-logs',
+                '/cameras': 'nav-cameras',
+                '/add_camera': 'nav-add-camera'
+            };
+            
+            const activeId = navMap[currentPath];
+            if (activeId) {
+                document.getElementById(activeId)?.classList.add('active');
+            }
+        }
+
+        function startNotificationListener() {
+            const evtSource = new EventSource("/api/notifications/stream");
+            evtSource.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                if (data.type === 'detection') showToast(data);
+            };
+            evtSource.onerror = function() {
+                evtSource.close();
+                setTimeout(startNotificationListener, 5000);
+            };
+        }
+
+        function showToast(data) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.innerHTML = `
+                <img src="${data.thumbnail}" class="toast-thumb">
+                <div class="toast-content">
+                    <span class="toast-title">${data.target} Detected</span>
+                    <span class="toast-meta">${data.camera} • ${data.time}</span>
+                </div>
+            `;
+            container.appendChild(toast);
+            setTimeout(() => toast.classList.add('active'), 100);
+            setTimeout(() => {
+                toast.classList.remove('active');
+                setTimeout(() => toast.remove(), 600);
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
+
+

@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Vigilance - Add Camera</title>
+    <style>
+        :root {
+            --bg-primary: #f0f0f0;
+            --bg-secondary: #f4f5f7;
+            --bg-panel: #ffffff;
+            --text-primary: #333333;
+            --text-secondary: #666666;
+            --border-color: #dddddd;
+            --sidebar-bg: #2d2d2d;
+            --sidebar-active: #3a3a3a;
+            --accent: #c41e3a;
+            --accent-hover: #a01830;
+            --shadow: 0 2px 10px rgba(0,0,0,0.05);
+            --input-bg: #ffffff;
+        }
+
+        [data-theme="dark"] {
+            --bg-primary: #121212;
+            --bg-secondary: #1e1e1e;
+            --bg-panel: #252525;
+            --text-primary: #e0e0e0;
+            --text-secondary: #aaaaaa;
+            --border-color: #333333;
+            --sidebar-bg: #1a1a1a;
+            --sidebar-active: #2d2d2d;
+            --shadow: 0 4px 20px rgba(0,0,0,0.4);
+            --input-bg: #2a2a2a;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: var(--bg-primary); 
+            color: var(--text-primary);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            transition: background 0.3s, color 0.3s;
+        }
+    </style>
+
+    <!-- Inline script to prevent white flash -->
+    <script>
+        (function() {
+            const theme = localStorage.getItem('theme') || 'light';
+            document.documentElement.setAttribute('data-theme', theme);
+        })();
+    </script>
+    
+    <style>
+        .app-container { display: flex; width: 100%; height: 100vh; }
+        
+        /* Unified Sidebar Styles */
+        .sidebar {
+            width: 260px;
+            background: var(--sidebar-bg);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            z-index: 100;
+            overflow-y: auto;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .sidebar-header {
+            padding: 20px;
+            background: var(--accent);
+            color: #fff;
+            font-size: 18px;
+            font-weight: 800;
+            letter-spacing: 1px;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .sidebar-info {
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: rgba(0,0,0,0.05);
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .user-avatar {
+            width: 40px; height: 40px;
+            background: var(--accent);
+            border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            color: #fff; font-weight: bold; font-size: 18px;
+        }
+        .user-details { overflow: hidden; }
+        .user-name { font-size: 14px; font-weight: 600; color: #fff; white-space: nowrap; text-overflow: ellipsis; }
+        .user-role { font-size: 11px; color: #aaa; text-transform: uppercase; }
+
+        .sidebar-section { border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .sidebar-title {
+            padding: 15px 20px 8px 20px;
+            color: #888;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 700;
+        }
+        .sidebar-menu { list-style: none; padding-bottom: 10px; }
+        .sidebar-menu li a {
+            display: flex;
+            align-items: center;
+            padding: 12px 20px;
+            color: #bbb;
+            text-decoration: none;
+            font-size: 13px;
+            transition: all 0.2s;
+            border-left: 4px solid transparent;
+        }
+        .sidebar-menu li a:hover {
+            background: rgba(255,255,255,0.05);
+            color: #fff;
+        }
+        .sidebar-menu li a.active {
+            background: rgba(196, 30, 58, 0.1);
+            color: #fff;
+            border-left-color: var(--accent);
+            font-weight: 600;
+        }
+        .sidebar-footer {
+            margin-top: auto;
+            padding: 20px;
+            background: rgba(0,0,0,0.1);
+            border-top: 1px solid rgba(255,255,255,0.05);
+        }
+        .theme-toggle-container {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 15px;
+        }
+        .theme-label { color: #888; font-size: 12px; font-weight: 600; }
+        .theme-switch { position: relative; display: inline-block; width: 40px; height: 20px; }
+        .theme-switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #444; transition: .4s; border-radius: 20px; }
+        .slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: var(--accent); }
+        input:checked + .slider:before { transform: translateX(20px); }
+
+        .logout-btn-side {
+            width: 100%;
+            padding: 12px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: #ef4444;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            transition: all 0.2s;
+        }
+        .logout-btn-side:hover {
+            background: rgba(239, 68, 68, 0.1);
+            border-color: #ef4444;
+            color: #fff;
+        }
+
+        /* Main Content */
+        .main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+        .toolbar {
+            padding: 20px 32px;
+            background: var(--bg-panel);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: var(--shadow);
+            z-index: 10;
+        }
+        .toolbar-title { font-size: 1.25rem; font-weight: 700; color: var(--text-primary); }
+        
+        .content { flex: 1; padding: 40px; overflow-y: auto; background: var(--bg-secondary); }
+
+        /* Form Panel */
+        .content-grid {
+            max-width: 500px;
+            margin: 0 auto;
+        }
+        .panel {
+            background: var(--bg-panel);
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            animation: slideUp 0.4s ease-out;
+        }
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .panel-header {
+            background: var(--accent);
+            padding: 24px;
+            color: white;
+            font-weight: 700;
+            font-size: 1.1rem;
+            text-align: center;
+        }
+        .panel-body { padding: 32px; }
+
+        .form-group { margin-bottom: 24px; }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+        .form-group input, 
+        .form-group select {
+            width: 100%;
+            padding: 12px 16px;
+            background: var(--input-bg);
+            border: 1.5px solid var(--border-color);
+            border-radius: 10px;
+            color: var(--text-primary);
+            font-size: 0.95rem;
+            transition: all 0.2s;
+            outline: none;
+        }
+        .form-group input:focus, 
+        .form-group select:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 4px rgba(196, 30, 58, 0.1);
+        }
+
+        .btn-submit {
+            width: 100%;
+            padding: 14px;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-weight: 700;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 4px 12px rgba(196, 30, 58, 0.2);
+        }
+        .btn-submit:hover { background: var(--accent-hover); transform: translateY(-2px); }
+
+        /* Toast Notifications */
+        .toast-container {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            z-index: 10000;
+            pointer-events: none;
+        }
+        .toast {
+            width: 320px;
+            background: var(--bg-panel); border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.25); border: 1px solid var(--border-color);
+            padding: 16px; display: flex; gap: 12px; align-items: center;
+            transform: translateX(400px); transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            pointer-events: auto; position: relative; overflow: hidden;
+        }
+        .toast.active { transform: translateX(0); }
+        .toast-thumb { width: 50px; height: 50px; border-radius: 8px; object-fit: cover; border: 2px solid var(--accent); }
+        .toast-content { flex: 1; }
+        .toast-title { font-weight: 700; font-size: 14px; color: var(--text-primary); }
+        .toast-meta { font-size: 11px; color: var(--text-secondary); display: block; }
+        .toast-progress {
+            position: absolute; bottom: 0; left: 0;
+            height: 3px; background: var(--accent);
+            width: 100%;
+        }
+    </style>
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <aside class="sidebar">
+            <div class="sidebar-header">AI VIGILANCE</div>
+            
+            <div class="sidebar-info">
+                <div class="user-avatar">A</div>
+                <div class="user-details">
+                    <div class="user-name">Administrator</div>
+                    <div class="user-role">System Operator</div>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="sidebar-title">Monitoring</div>
+                <ul class="sidebar-menu">
+                    <li><a href="/" id="nav-live">Live Stream</a></li>
+                    <li><a href="/dashboard" id="nav-dashboard">Dashboard</a></li>
+                    <li><a href="/recordings_page" id="nav-recordings">Recordings</a></li>
+                    <li><a href="/detection_logs" id="nav-logs">Detection Logs</a></li>
+                </ul>
+            </div>
+            <div class="sidebar-section">
+                <div class="sidebar-title">Analytics</div>
+                <ul class="sidebar-menu">
+                    <li><a href="/people" id="nav-people">People Registry</a></li>
+                    <li><a href="/search" id="nav-search">Search & Filters</a></li>
+                    <li><a href="/journey" id="nav-journey">Journey Tracking</a></li>
+                    <li><a href="/analytics" id="nav-analytics">Analytics</a></li>
+                    <li><a href="/registered_detections" id="nav-reg-logs">Identity Logs</a></li>
+                </ul>
+            </div>
+            <div class="sidebar-section">
+                <div class="sidebar-title">Operations</div>
+                <ul class="sidebar-menu">
+                    <li><a href="/cameras" id="nav-cameras">Cameras</a></li>
+                    <li><a href="/add_camera" id="nav-add-camera">Add Camera</a></li>
+                </ul>
+            </div>
+            
+            <div class="sidebar-footer">
+                <div class="theme-toggle-container">
+                    <span class="theme-label">Dark Mode</span>
+                    <label class="theme-switch">
+                        <input type="checkbox" id="theme-checkbox" onchange="toggleTheme()">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <button class="logout-btn-side" onclick="location.href='/logout'">
+                    🚪 Logout Session
+                </button>
+            </div>
+        </aside>
+
+        <div class="toast-container" id="toast-container"></div>
+
+        <div class="main-content">
+            <div class="toolbar">
+                <h1 class="toolbar-title">Register New Surveillance Node</h1>
+                <div id="live-clock" style="font-weight: 700; color: var(--text-secondary); font-family: monospace;"></div>
+            </div>
+            
+            <div class="content">
+                <div class="content-grid">
+                    <div class="panel">
+                        <div class="panel-header">NODE CONFIGURATION</div>
+                        <div class="panel-body">
+                            <form id="camera-form">
+                                <div class="form-group">
+                                    <label>IDENTIFIER</label>
+                                    <input type="text" name="camera_id" placeholder="e.g. Zone-A Entrance" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>PROTOCOL TYPE</label>
+                                    <select name="camera_type" id="camera-type">
+                                        <option value="webcam">Local Media Engine (Webcam)</option>
+                                        <option value="rtsp">Network Stream (RTSP/ONVIF)</option>
+                                        <option value="ipwebcam">IP Sensor Array</option>
+                                        <option value="droidcam">Mobile Link</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>SOURCE / ENDPOINT</label>
+                                    <input type="text" name="source" id="camera-source" placeholder="e.g. 0 or rtsp://..." required>
+                                </div>
+                                <button type="submit" class="btn-submit">INITIALIZE CAMERA</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Theme Engine ---
+        function toggleTheme() {
+            const current = document.documentElement.getAttribute('data-theme');
+            const target = current === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', target);
+            localStorage.setItem('theme', target);
+        }
+
+        // --- Notification Engine ---
+        function startNotificationListener() {
+            const evtSource = new EventSource("/api/notifications/stream");
+            evtSource.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                if (data.type === 'detection') showToast(data);
+            };
+            evtSource.onerror = function() {
+                evtSource.close();
+                setTimeout(startNotificationListener, 5000);
+            };
+        }
+
+        function showToast(data) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.innerHTML = `
+                <img src="${data.thumbnail}" class="toast-thumb">
+                <div class="toast-content">
+                    <span class="toast-title">${data.target} Spotted</span>
+                    <span class="toast-meta">${data.camera} • ${data.time}</span>
+                </div>
+                <div class="toast-progress"></div>
+            `;
+            container.appendChild(toast);
+            setTimeout(() => toast.classList.add('active'), 100);
+            const progress = toast.querySelector('.toast-progress');
+            progress.animate([{ width: '100%' }, { width: '0%' }], { duration: 5000, fill: 'forwards' });
+            setTimeout(() => {
+                toast.classList.remove('active');
+                setTimeout(() => toast.remove(), 600);
+            }, 5000);
+        }
+
+        // --- Server-Synced IST Clock ---
+        let _serverOffset = 0;
+        async function syncServerTime() {
+            try {
+                const t0 = Date.now();
+                const res = await fetch('/api/server_time');
+                const t1 = Date.now();
+                if (res.ok) {
+                    const data = await res.json();
+                    _serverOffset = data.timestamp_ms - t0 + Math.round((t1 - t0) / 2);
+                }
+            } catch(e) {}
+        }
+        function getServerIST() { return new Date(Date.now() + _serverOffset); }
+        function updateLiveClock() {
+            const timeString = getServerIST().toLocaleString('en-IN', {
+                timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
+            });
+            document.getElementById('live-clock').textContent = 'SYNC: ' + timeString + ' IST';
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const theme = localStorage.getItem('theme') || 'light';
+            document.getElementById('theme-checkbox').checked = (theme === 'dark');
+            syncServerTime().then(() => {
+                updateLiveClock();
+                setInterval(updateLiveClock, 1000);
+            });
+            startNotificationListener();
+            setActiveNav();
+        });
+
+        function setActiveNav() {
+            const currentPath = window.location.pathname;
+            const navMap = {
+                '/dashboard': 'nav-dashboard',
+                '/': 'nav-live',
+                '/recordings_page': 'nav-recordings',
+                '/detection_logs': 'nav-logs',
+                '/people': 'nav-people',
+                '/search': 'nav-search',
+                '/journey': 'nav-journey',
+                '/analytics': 'nav-analytics',
+                '/registered_detections': 'nav-reg-logs',
+                '/cameras': 'nav-cameras',
+                '/add_camera': 'nav-add-camera'
+            };
+            
+            const activeId = navMap[currentPath];
+            if (activeId) {
+                document.getElementById(activeId)?.classList.add('active');
+            }
+        }
+
+        // Add camera AJAX logic
+        document.getElementById('camera-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = e.target.querySelector('button');
+            const originalText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'Initializing...';
+
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData);
+            
+            try {
+                const res = await fetch('/api/add_camera', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await res.json();
+                if (result.status === 'success') {
+                    // Show a specialized success notification for UI feedback
+                    const successToast = document.createElement('div');
+                    successToast.className = 'toast active';
+                    successToast.innerHTML = `
+                        <div class="toast-content">
+                            <span class="toast-title">Node Registered</span>
+                            <span class="toast-meta">Camera successfully added to grid.</span>
+                        </div>
+                    `;
+                    document.getElementById('toast-container').appendChild(successToast);
+                    setTimeout(() => successToast.remove(), 3000);
+
+                    e.target.reset();
+                    // setTimeout(() => window.location.href = '/cameras', 1500); // Removed per request
+                } else {
+                    alert('Registration Failed: ' + (result.message || 'Unknown Error'));
+                }
+            } catch (err) {
+                alert('Connection Error: ' + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
+        });
+    </script>
+</body>
+</html>
+

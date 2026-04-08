@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Vigilance - Search & Events</title>
+    <link rel="stylesheet" href="/static/skeleton.css">
+    <style>
+        :root {
+            --bg-primary: #f0f0f0;
+            --bg-secondary: #f4f5f7;
+            --bg-panel: #ffffff;
+            --text-primary: #333333;
+            --text-secondary: #666666;
+            --border-color: #dddddd;
+            --sidebar-bg: #2d2d2d;
+            --sidebar-active: #3a3a3a;
+            --accent: #c41e3a;
+            --accent-hover: #a01830;
+            --shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+
+        [data-theme="dark"] {
+            --bg-primary: #121212;
+            --bg-secondary: #1e1e1e;
+            --bg-panel: #252525;
+            --text-primary: #e0e0e0;
+            --text-secondary: #aaaaaa;
+            --border-color: #333333;
+            --sidebar-bg: #1a1a1a;
+            --sidebar-active: #2d2d2d;
+            --shadow: 0 4px 20px rgba(0,0,0,0.4);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: var(--bg-primary); 
+            color: var(--text-primary);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            transition: background 0.3s, color 0.3s;
+        }
+    </style>
+
+    <!-- Inline script to prevent white flash -->
+    <script>
+        (function() {
+            const theme = localStorage.getItem('theme') || 'light';
+            document.documentElement.setAttribute('data-theme', theme);
+        })();
+    </script>
+    
+    <style>
+        .app-container { display: flex; width: 100%; height: 100vh; }
+        
+        /* Unified Sidebar Styles */
+        .sidebar {
+            width: 260px;
+            background: var(--sidebar-bg);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            z-index: 100;
+            overflow-y: auto;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .sidebar-header {
+            padding: 20px;
+            background: var(--accent);
+            color: #fff;
+            font-size: 18px;
+            font-weight: 800;
+            letter-spacing: 1px;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .sidebar-info {
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: rgba(0,0,0,0.05);
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .user-avatar {
+            width: 40px; height: 40px;
+            background: var(--accent);
+            border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            color: #fff; font-weight: bold; font-size: 18px;
+        }
+        .user-details { overflow: hidden; }
+        .user-name { font-size: 14px; font-weight: 600; color: #fff; white-space: nowrap; text-overflow: ellipsis; }
+        .user-role { font-size: 11px; color: #aaa; text-transform: uppercase; }
+
+        .sidebar-section { border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .sidebar-title {
+            padding: 15px 20px 8px 20px;
+            color: #888;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 700;
+        }
+        .sidebar-menu { list-style: none; padding-bottom: 10px; }
+        .sidebar-menu li a {
+            display: flex;
+            align-items: center;
+            padding: 12px 20px;
+            color: #bbb;
+            text-decoration: none;
+            font-size: 13px;
+            transition: all 0.2s;
+            border-left: 4px solid transparent;
+        }
+        .sidebar-menu li a:hover {
+            background: rgba(255,255,255,0.05);
+            color: #fff;
+        }
+        .sidebar-menu li a.active {
+            background: rgba(196, 30, 58, 0.1);
+            color: #fff;
+            border-left-color: var(--accent);
+            font-weight: 600;
+        }
+        .sidebar-footer {
+            margin-top: auto;
+            padding: 20px;
+            background: rgba(0,0,0,0.1);
+            border-top: 1px solid rgba(255,255,255,0.05);
+        }
+        .theme-toggle-container {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 15px;
+        }
+        .theme-label { color: #888; font-size: 12px; font-weight: 600; }
+        .theme-switch { position: relative; display: inline-block; width: 40px; height: 20px; }
+        .theme-switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #444; transition: .4s; border-radius: 20px; }
+        .slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: var(--accent); }
+        input:checked + .slider:before { transform: translateX(20px); }
+
+        .logout-btn-side {
+            width: 100%;
+            padding: 12px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: #ef4444;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            transition: all 0.2s;
+        }
+        .logout-btn-side:hover {
+            background: rgba(239, 68, 68, 0.1);
+            border-color: #ef4444;
+            color: #fff;
+        }
+
+        /* Main Content */
+        .main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+        .toolbar {
+            padding: 20px 32px;
+            background: var(--bg-panel);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: var(--shadow);
+            z-index: 10;
+        }
+        .toolbar-title { font-size: 1.25rem; font-weight: 700; color: var(--text-primary); }
+        .content { flex: 1; padding: 32px; overflow-y: auto; background: var(--bg-secondary); }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 2px;
+            background: var(--bg-panel);
+            padding: 4px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+            box-shadow: var(--shadow);
+            width: fit-content;
+            border: 1px solid var(--border-color);
+        }
+        .tab {
+            padding: 10px 24px;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 600;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+        .tab:hover { color: var(--text-primary); background: var(--bg-secondary); }
+        .tab.active {
+            background: var(--accent);
+            color: white;
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; animation: fadeIn 0.4s ease-out; }
+
+        /* Panel */
+        .panel {
+            background: var(--bg-panel);
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            margin-bottom: 24px;
+            overflow: hidden;
+            box-shadow: var(--shadow);
+        }
+        .panel-header {
+            background: rgba(0,0,0,0.02);
+            padding: 16px 24px;
+            border-bottom: 1px solid var(--border-color);
+            font-weight: 700;
+            font-size: 0.95rem;
+            color: var(--text-primary);
+        }
+        .panel-body { padding: 24px; }
+
+        /* Forms */
+        .filter-bar { display: flex; gap: 20px; align-items: flex-end; flex-wrap: wrap; }
+        .filter-group { display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 200px; }
+        .filter-group label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--text-secondary); letter-spacing: 0.5px; }
+        .filter-group input, .filter-group select {
+            padding: 12px;
+            border: 1px solid var(--border-color);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            border-radius: 8px;
+            font-size: 0.9rem;
+            transition: border-color 0.2s;
+        }
+        .filter-group input:focus { border-color: var(--accent); outline: none; }
+
+        .btn {
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid var(--border-color);
+            font-size: 0.9rem;
+        }
+        .btn-primary { background: var(--accent); color: white; border-color: var(--accent); }
+        .btn-primary:hover { background: var(--accent-hover); transform: translateY(-1px); }
+        .btn-success { background: #27ae60; color: white; border-color: #27ae60; }
+        .btn-success:hover { background: #219a52; transform: translateY(-1px); }
+
+        /* Table */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: var(--bg-panel);
+        }
+        .data-table th {
+            text-align: left;
+            padding: 16px 24px;
+            background: rgba(0,0,0,0.02);
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .data-table td {
+            padding: 16px 24px;
+            border-bottom: 1px solid var(--border-color);
+            color: var(--text-primary);
+            font-size: 0.9rem;
+        }
+        .data-table tr:hover { background: var(--bg-secondary); }
+
+        /* Toast Notifications */
+        .toast-container {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            z-index: 10000;
+            pointer-events: none;
+        }
+        .toast {
+            width: 320px;
+            background: var(--bg-panel);
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+            border: 1px solid var(--border-color);
+            padding: 16px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            transform: translateX(400px);
+            transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            pointer-events: auto;
+            position: relative;
+            overflow: hidden;
+        }
+        .toast.active { transform: translateX(0); }
+        .toast-thumb {
+            width: 50px; height: 50px;
+            border-radius: 8px; object-fit: cover;
+            border: 2px solid var(--accent);
+        }
+        .toast-content { flex: 1; }
+        .toast-title { font-weight: 700; font-size: 14px; color: var(--text-primary); }
+        .toast-meta { font-size: 11px; color: var(--text-secondary); display: block; }
+        .toast-progress {
+            position: absolute; bottom: 0; left: 0;
+            height: 3px; background: var(--accent);
+            width: 100%;
+        }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Analytics Cards */
+        .analytics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 24px; }
+        .stat-card {
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            background: var(--bg-panel);
+            box-shadow: var(--shadow);
+        }
+        .stat-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 8px; }
+        .stat-value { font-size: 1.5rem; font-weight: 800; color: var(--accent); }
+
+        .preview-box {
+            margin-top: 16px;
+            padding: 12px;
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            border: 2px dashed var(--border-color);
+            display: inline-block;
+        }
+        #target-preview-img { max-width: 200px; border-radius: 8px; display: block; }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <aside class="sidebar">
+            <div class="sidebar-header">AI VIGILANCE</div>
+            
+            <div class="sidebar-info">
+                <div class="user-avatar">A</div>
+                <div class="user-details">
+                    <div class="user-name">Administrator</div>
+                    <div class="user-role">System Operator</div>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="sidebar-title">Monitoring</div>
+                <ul class="sidebar-menu">
+                    <li><a href="/" id="nav-live">Live Stream</a></li>
+                    <li><a href="/dashboard" id="nav-dashboard">Dashboard</a></li>
+                    <li><a href="/recordings_page" id="nav-recordings">Recordings</a></li>
+                    <li><a href="/detection_logs" id="nav-logs">Detection Logs</a></li>
+                </ul>
+            </div>
+            <div class="sidebar-section">
+                <div class="sidebar-title">Analytics</div>
+                <ul class="sidebar-menu">
+                    <li><a href="/people" id="nav-people">People Registry</a></li>
+                    <li><a href="/search" id="nav-search">Search & Filters</a></li>
+                    <li><a href="/journey" id="nav-journey">Journey Tracking</a></li>
+                    <li><a href="/analytics" id="nav-analytics">Analytics</a></li>
+                    <li><a href="/registered_detections" id="nav-reg-logs">Identity Logs</a></li>
+                </ul>
+            </div>
+            <div class="sidebar-section">
+                <div class="sidebar-title">Operations</div>
+                <ul class="sidebar-menu">
+                    <li><a href="/cameras" id="nav-cameras">Cameras</a></li>
+                    <li><a href="/add_camera" id="nav-add-camera">Add Camera</a></li>
+                </ul>
+            </div>
+            
+            <div class="sidebar-footer">
+                <div class="theme-toggle-container">
+                    <span class="theme-label">Dark Mode</span>
+                    <label class="theme-switch">
+                        <input type="checkbox" id="theme-checkbox" onchange="toggleTheme()">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <button class="logout-btn-side" onclick="location.href='/logout'">
+                    🚪 Logout Session
+                </button>
+            </div>
+        </aside>
+
+        <div class="toast-container" id="toast-container"></div>
+
+        <div class="main-content">
+            <div class="toolbar">
+                <h1 class="toolbar-title">Search & Events</h1>
+                <div id="live-clock" style="font-weight: bold; color: #555;"></div>
+            </div>
+            
+            <div class="content">
+                <!-- Tabs -->
+                <div class="tabs">
+                    <button class="tab active" onclick="showTab('detection')">Search Registered Person</button>
+                    <button class="tab" onclick="showTab('active')">Search by Image (Unregistered)</button>
+                </div>
+
+                <!-- Detection Search Tab -->
+                <div class="tab-content active" id="detection-tab">
+                    <div class="panel">
+                        <div class="panel-header">Search Detection History</div>
+                        <div class="panel-body">
+                            <div class="filter-bar">
+                                <div class="filter-group">
+                                    <label>Person Name:</label>
+                                    <input type="text" id="search-name" placeholder="Enter name">
+                                </div>
+                                <div class="filter-group">
+                                    <label>From:</label>
+                                    <input type="datetime-local" id="search-start">
+                                </div>
+                                <div class="filter-group">
+                                    <label>To:</label>
+                                    <input type="datetime-local" id="search-end">
+                                </div>
+                                <button class="btn btn-primary" onclick="searchDetections()">Search</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="panel" style="display: none;" id="analytics-panel">
+                        <div class="panel-header">📊 Investigation Summary</div>
+                        <div class="panel-body">
+                            <div class="analytics-grid">
+                                <div class="stat-card">
+                                    <div class="stat-label">Hits Found</div>
+                                    <div class="stat-value" id="analytics-total">0</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">Unique Targets</div>
+                                    <div class="stat-value" id="analytics-unique" style="color: #27ae60;">0</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">Active Cameras</div>
+                                    <div class="stat-value" id="analytics-cameras" style="color: #2980b9;">0</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">Time Span</div>
+                                    <div class="stat-value" id="analytics-time" style="font-size: 0.8rem; color: var(--text-secondary);">-</div>
+                                </div>
+                            </div>
+                            
+                            <div style="background: var(--bg-secondary); padding: 20px; border-radius: 12px; border: 1px solid var(--border-color);">
+                                <h4 style="margin: 0 0 15px 0; font-size: 0.85rem; text-transform: uppercase; color: var(--text-secondary);">Frequency Analysis</h4>
+                                <div id="analytics-breakdown" style="display: grid; gap: 12px;"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="panel">
+                        <div class="panel-header">Search Results</div>
+                        <div class="panel-body">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Time</th>
+                                        <th>Person</th>
+                                        <th>Camera</th>
+                                        <th>Image</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="detection-results">
+                                    <tr>
+                                        <td colspan="4" style="text-align: center; color: #888;">Enter search criteria and click Search</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Image Search Tab -->
+                <div class="tab-content" id="active-tab">
+                    <div class="panel">
+                        <div class="panel-header">Find Person by Photo</div>
+                        <div class="panel-body">
+                            <div class="filter-bar">
+                                <div class="filter-group">
+                                    <label>Upload Target Photo:</label>
+                                    <input type="file" id="search-photo" accept="image/*" onchange="previewSearchPhoto(this)">
+                                </div>
+                                <div class="filter-group">
+                                    <label>From:</label>
+                                    <input type="datetime-local" id="image-search-start">
+                                </div>
+                                <div class="filter-group">
+                                    <label>To:</label>
+                                    <input type="datetime-local" id="image-search-end">
+                                </div>
+                                <button class="btn btn-success" onclick="searchByImage()">Search History</button>
+                            </div>
+                            <div id="image-search-preview" style="margin-top: 20px; display: none;">
+                                <div class="preview-box">
+                                    <span style="display: block; font-size: 0.7rem; font-weight: 700; margin-bottom: 8px; color: var(--text-secondary); text-transform: uppercase;">Image Target Preview</span>
+                                    <img id="target-preview-img">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="panel">
+                        <div class="panel-header">Similarity Match Results</div>
+                        <div class="panel-body">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Time</th>
+                                        <th>Match Confidence</th>
+                                        <th>Camera</th>
+                                        <th>Evidence</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="image-results-body">
+                                    <tr>
+                                        <td colspan="4" style="text-align: center; color: #888;">Upload a photo and set time range to begin similarity search</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="/static/skeleton.js"></script>
+    <script>
+        // --- Theme Logic ---
+        function toggleTheme() {
+            const current = document.documentElement.getAttribute('data-theme');
+            const target = current === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', target);
+            localStorage.setItem('theme', target);
+        }
+
+        // --- Notification Engine ---
+        function startNotificationListener() {
+            const evtSource = new EventSource("/api/notifications/stream");
+            evtSource.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                if (data.type === 'detection') showToast(data);
+            };
+            evtSource.onerror = function() {
+                evtSource.close();
+                setTimeout(startNotificationListener, 5000);
+            };
+        }
+
+        function showToast(data) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.innerHTML = `
+                <img src="${data.thumbnail}" class="toast-thumb">
+                <div class="toast-content">
+                    <span class="toast-title">${data.target} spotted</span>
+                    <span class="toast-meta">${data.camera} • ${data.time}</span>
+                </div>
+                <div class="toast-progress"></div>
+            `;
+            container.appendChild(toast);
+            setTimeout(() => toast.classList.add('active'), 100);
+            const progress = toast.querySelector('.toast-progress');
+            progress.animate([{ width: '100%' }, { width: '0%' }], { duration: 5000, fill: 'forwards' });
+            setTimeout(() => {
+                toast.classList.remove('active');
+                setTimeout(() => toast.remove(), 600);
+            }, 5000);
+        }
+
+        // --- Server-Synced IST Clock ---
+        let _serverOffset = 0;
+        async function syncServerTime() {
+            try {
+                const t0 = Date.now();
+                const res = await fetch('/api/server_time');
+                const t1 = Date.now();
+                if (res.ok) {
+                    const data = await res.json();
+                    _serverOffset = data.timestamp_ms - t0 + Math.round((t1 - t0) / 2);
+                }
+            } catch(e) {}
+        }
+        function getServerIST() { return new Date(Date.now() + _serverOffset); }
+        function updateLiveClock() {
+            const timeString = getServerIST().toLocaleString('en-IN', {
+                timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
+            });
+            document.getElementById('live-clock').textContent = 'SYNC: ' + timeString + ' IST';
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const theme = localStorage.getItem('theme') || 'light';
+            document.getElementById('theme-checkbox').checked = (theme === 'dark');
+            syncServerTime().then(() => {
+                updateLiveClock();
+                setInterval(updateLiveClock, 1000);
+            });
+            startNotificationListener();
+            setActiveNav();
+        });
+
+        function setActiveNav() {
+            const currentPath = window.location.pathname;
+            const navMap = {
+                '/dashboard': 'nav-dashboard',
+                '/': 'nav-live',
+                '/recordings_page': 'nav-recordings',
+                '/detection_logs': 'nav-logs',
+                '/people': 'nav-people',
+                '/search': 'nav-search',
+                '/journey': 'nav-journey',
+                '/analytics': 'nav-analytics',
+                '/registered_detections': 'nav-reg-logs',
+                '/cameras': 'nav-cameras',
+                '/add_camera': 'nav-add-camera'
+            };
+            
+            const activeId = navMap[currentPath];
+            if (activeId) {
+                document.getElementById(activeId)?.classList.add('active');
+            }
+        }
+
+        // Tab switching
+        function showTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            if (tab === 'detection') {
+                document.querySelectorAll('.tab')[0].classList.add('active');
+                document.getElementById('detection-tab').classList.add('active');
+            } else {
+                document.querySelectorAll('.tab')[1].classList.add('active');
+                document.getElementById('active-tab').classList.add('active');
+            }
+        }
+
+        // Search detections
+        async function searchDetections() {
+            const name = document.getElementById('search-name').value;
+            const start = document.getElementById('search-start').value;
+            const end = document.getElementById('search-end').value;
+            const tbody = document.getElementById('detection-results');
+            const analyticsPanel = document.getElementById('analytics-panel');
+            // Show skeleton rows while querying
+            Boneyard.tableRows('detection-results', 4, 4);
+            try {
+                const params = new URLSearchParams();
+                if (name) params.append('name', name);
+                if (start) params.append('start_time', start);
+                if (end) params.append('end_time', end);
+                const res = await fetch(`/api/search_detections?${params}`);
+                const data = await res.json();
+                if (data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-secondary);">No matches found in records.</td></tr>';
+                    analyticsPanel.style.display = 'none';
+                    return;
+                }
+                analyticsPanel.style.display = 'block';
+                updateAnalytics(data);
+                tbody.innerHTML = data.map(d => {
+                    const imgUrl = d.image_path ? `/api/snapshot_image?path=${encodeURIComponent(d.image_path)}` : null;
+                    let cropsHtml = '';
+                    if (d.person_crops && d.person_crops.length > 0) {
+                        cropsHtml = d.person_crops.map((cropPath, idx) => {
+                            const n = d.person_names[idx] || 'Unknown';
+                            return `<img src="/api/snapshot_image?path=${encodeURIComponent(cropPath)}" 
+                                      style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--accent); margin-right: 4px;" title="${n}">`;
+                        }).join('');
+                    }
+                    return `
+                        <tr>
+                            <td style="font-family: monospace; font-weight: 600;">${new Date(d.timestamp).toLocaleString('en-IN', {timeZone: 'Asia/Kolkata'})}</td>
+                            <td><div style="display: flex;">${cropsHtml}</div></td>
+                            <td><span style="font-weight: 600;">${d.camera_name}</span><br><small style="color:var(--text-secondary)">IP: ${d.camera_ip}</small></td>
+                            <td style="text-align: center;">
+                                ${imgUrl ? `<button class="btn" onclick="window.open('${imgUrl}')" style="padding: 4px 8px;">View Frame</button>` : '-'}
+                            </td>
+                        </tr>`;
+                }).join('');
+            } catch (err) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #c41e3a;">System error during search.</td></tr>';
+            }
+        }
+
+        function previewSearchPhoto(input) {
+            const preview = document.getElementById('image-search-preview');
+            const img = document.getElementById('target-preview-img');
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = e => { img.src = e.target.result; preview.style.display = 'block'; }
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+
+        async function searchByImage() {
+            const fileInput = document.getElementById('search-photo');
+            const start = document.getElementById('image-search-start').value;
+            const end = document.getElementById('image-search-end').value;
+            const tbody = document.getElementById('image-results-body');
+            if (!fileInput.files[0]) { alert('Select a reference photo first.'); return; }
+            // Show skeleton rows during deep visual search
+            Boneyard.tableRows('image-results-body', 4, 3);
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            if (start) formData.append('start_time', start);
+            if (end) formData.append('end_time', end);
+            try {
+                const res = await fetch('/api/search_by_image', { method: 'POST', body: formData });
+                const data = await res.json();
+                if (data.error) { tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: #c41e3a;">${data.error}</td></tr>`; return; }
+                if (data.length === 0) { tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-secondary);">No visual matches found.</td></tr>'; return; }
+                tbody.innerHTML = data.map(d => {
+                    const imgUrl = d.image_path ? `/api/snapshot_image?path=${encodeURIComponent(d.image_path)}` : null;
+                    return `
+                        <tr>
+                            <td style="font-family: monospace; font-weight: 600;">${new Date(d.timestamp).toLocaleString('en-IN', {timeZone: 'Asia/Kolkata'})}</td>
+                            <td><span style="color: #27ae60; font-weight: 700;">Similarity Match Found</span></td>
+                            <td>${d.camera_id}</td>
+                            <td>${imgUrl ? `<img src="${imgUrl}" style="height: 80px; border-radius: 8px; cursor: pointer; border: 1px solid var(--border-color);" onclick="window.open('${imgUrl}')">` : '-'}</td>
+                        </tr>`;
+                }).join('');
+            } catch (err) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #c41e3a;">Visual search failed.</td></tr>';
+            }
+        }
+
+        function updateAnalytics(data) {
+            document.getElementById('analytics-total').textContent = data.length;
+            const uniquePersons = new Set();
+            data.forEach(d => { if(d.person_names) d.person_names.forEach(n => uniquePersons.add(n)); });
+            document.getElementById('analytics-unique').textContent = uniquePersons.size || 1;
+            const uniqueCameras = [...new Set(data.map(d => d.camera_id))];
+            document.getElementById('analytics-cameras').textContent = uniqueCameras.length;
+            if (data.length > 0) {
+                const times = data.map(d => new Date(d.timestamp).getTime());
+                const minT = new Date(Math.min(...times));
+                const maxT = new Date(Math.max(...times));
+                document.getElementById('analytics-time').textContent = `${minT.toLocaleDateString()} to ${maxT.toLocaleDateString()}`;
+            }
+            const personCount = {};
+            data.forEach(d => { if(d.person_names) d.person_names.forEach(n => personCount[n] = (personCount[n] || 0) + 1); });
+            const breakdownEl = document.getElementById('analytics-breakdown');
+            breakdownEl.innerHTML = Object.entries(personCount)
+                .sort((a, b) => b[1] - a[1])
+                .map(([name, count]) => {
+                    const pct = Math.round((count / data.length) * 100);
+                    return `
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                            <div style="flex: 1; font-size: 0.85rem; font-weight: 600;">${name}</div>
+                            <div style="flex: 3; background: var(--bg-secondary); height: 12px; border-radius: 6px; overflow: hidden; border: 1px solid var(--border-color);">
+                                <div style="width: ${pct}%; background: var(--accent); height: 100%;"></div>
+                            </div>
+                            <div style="flex: 1; text-align: right; font-size: 0.85rem; font-weight: 700; color: var(--accent);">${count} Hits (${pct}%)</div>
+                        </div>`;
+                }).join('');
+        }
+    </script>
+</body>
+</html>
+
