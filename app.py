@@ -194,16 +194,20 @@ class GlobalReIDManager:
             except Exception as e:
                 logger.error(f"✗ Global Re-ID Load Error: {e}")
 
-    def match(self, encoding, threshold=0.75):
-        """Find matching global ID for an encoding. Threshold tuned for InceptionResnetV1."""
+    def match(self, encoding, threshold=0.65):
+        """Find matching global ID for an encoding using cosine similarity."""
         if encoding is None: return None
         with self.lock:
             best_id = None
-            min_dist = threshold
+            best_sim = threshold
             for item in self.identities:
-                dist = np.linalg.norm(encoding - item["encoding"])
-                if dist < min_dist:
-                    min_dist = dist
+                # cosine similarity
+                na = np.linalg.norm(encoding)
+                nb = np.linalg.norm(item["encoding"])
+                if na == 0 or nb == 0: continue
+                sim = float(np.dot(encoding, item["encoding"]) / (na * nb))
+                if sim > best_sim:
+                    best_sim = sim
                     best_id = item["id"]
             return best_id
 
@@ -425,40 +429,36 @@ def save_to_local(local_path: str, destination_dir: str, callback=None) -> bool:
         return False
 
 
-def recording_writer_thread(camera_id: str, stop_event: threading.Event):
-    """Background thread to write frames to FFmpeg stdin for direct streaming."""
-    print(f"[Recording:{camera_id}] Writer thread started (Streaming)")
-    
+def recording_writer_thread(camera_id: str, stop_event: threading.Event,
+                            process: subprocess.Popen):
+    """Background thread to write rendered frames to FFmpeg stdin at 2 FPS."""
+    print(f"[Recording:{camera_id}] Writer thread started")
     FRAME_INTERVAL = 0.5  # 2 FPS
-    
+
     while not stop_event.is_set():
         try:
-            with writer_lock:
-                if camera_id not in camera_writers:
-                    break
-                # Only need the stdin pipe
-                process = camera_writers[camera_id].get("process")
-            
-            # Get latest frame
+            if process.poll() is not None:
+                print(f"[Recording:{camera_id}] FFmpeg exited (code {process.returncode})")
+                break
+
             with results_lock:
                 data = camera_results.get(camera_id, {})
                 frame = data.get("rendered_frame")
-            
-            if frame is not None and process and process.poll() is None:
+
+            if frame is not None:
                 try:
                     process.stdin.write(frame.tobytes())
                     process.stdin.flush()
-                except (IOError, BrokenPipeError):
-                    print(f"[Recording:{camera_id}] Pipe broken, stopping writer")
+                except (IOError, BrokenPipeError) as e:
+                    print(f"[Recording:{camera_id}] Pipe broken: {e}")
                     break
-            
-            # Sleep to maintain 2 FPS
-            time.sleep(FRAME_INTERVAL)
-            
+
+            stop_event.wait(timeout=FRAME_INTERVAL)
+
         except Exception as e:
             print(f"[Recording:{camera_id}] Writer error: {e}")
-            time.sleep(1)
-    
+            stop_event.wait(timeout=1)
+
     print(f"[Recording:{camera_id}] Writer thread stopped")
 
 # Active search mission — set by /api/start_search, cleared by /api/stop_search
@@ -510,11 +510,8 @@ def process_camera(camera_id: str):
                     
                     p_ffmpeg = subprocess.Popen(ffmpeg_cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                     db_id = db_manager.start_recording(camera_id, local_path)
-                    
                     stop_event = threading.Event()
-                    r_thread = threading.Thread(target=recording_writer_thread, args=(camera_id, stop_event), daemon=True)
-                    r_thread.start()
-                    
+                    # Set camera_writers BEFORE starting thread to avoid race condition
                     camera_writers[camera_id] = {
                         "process": p_ffmpeg,
                         "db_id": db_id,
@@ -523,9 +520,11 @@ def process_camera(camera_id: str):
                         "camera_id": camera_id,
                         "w": w, "h": h
                     }
+                    r_thread = threading.Thread(target=recording_writer_thread, args=(camera_id, stop_event, p_ffmpeg), daemon=True)
+                    r_thread.start()
                     recording_threads[camera_id] = r_thread
                     recording_stop_events[camera_id] = stop_event
-                    print(f"[Recording:{camera_id}] Auto-started constant stream (FFmpeg)")
+                    print(f"[Recording:{camera_id}] Auto-started (FFmpeg)")
                 except Exception as err:
                     logger.error(f"Failed to auto-start FFmpeg for {camera_id}: {err}")
     
@@ -537,10 +536,8 @@ def process_camera(camera_id: str):
     # Process exactly 2 frames per second
     FRAME_INTERVAL: float = 0.5  # 500ms = 2 FPS
     
-    # Recognition runs on EVERY frame (2 FPS) for maximum accuracy
-    
     # Recognition cache: track_id -> (name, confidence, frame_number)
-    RECOGNITION_CACHE_FRAMES: int = 4  # Cache valid for 4 frames (~2 seconds at 2 FPS)
+    RECOGNITION_CACHE_FRAMES: int = 6  # Cache valid for 6 frames (~3s at 2 FPS)
     recognition_cache: Dict[Any, tuple] = {}
     
     # Track IDs currently in frame (to prevent double counting)
@@ -633,27 +630,28 @@ def process_camera(camera_id: str):
             # 3. Submit for Face Recognition (Worker Thread)
             for t in processed:
                 tid = t["id"]
-                # Skip if cache is still very fresh
+                # Skip if cache is still fresh
                 if tid in recognition_cache and (frame_count - recognition_cache[tid][2]) < (RECOGNITION_CACHE_FRAMES // 2):
                     continue
                 
-                # Recognition Cooling-off logic
+                # Cooldown: 4s if already identified, 1s if unknown (retry faster)
                 now = time.time()
                 with cooldown_lock:
                     last_time = recognition_cooldowns.get((camera_id, tid), 0)
-                    cooldown = 10.0 if t["name"] != "Unknown" else 2.0
+                    cooldown = 4.0 if t["name"] != "Unknown" else 1.0
                     if now - last_time < cooldown:
                         continue
                     recognition_cooldowns[(camera_id, tid)] = now
 
                 bx1, by1, bx2, by2 = [int(v) for v in t["bbox"]]
-                bw, bh = bx2 - bx1, by2 - by1
-                face_box = [bx1 + int(0.15 * bw), by1, bx2 - int(0.15 * bw), by1 + int(0.45 * bh)]
+                # Pass full body bbox — recognizer uses MTCNN internally to find tight face
+                body_box = [bx1, by1, bx2, by2]
 
                 try:
                     recognition_executor.submit(
                         self_recognition_worker,
-                        frame.copy(), face_box, tid, recognition_cache, frame_count, face_encoding_cache, track_merge_map, camera_id
+                        frame.copy(), body_box, tid, recognition_cache, frame_count,
+                        face_encoding_cache, track_merge_map, camera_id
                     )
                 except RuntimeError: break
 
@@ -914,14 +912,14 @@ def self_recognition_worker(frame, face_box, track_id, recognition_cache, frame_
                         break
         
         # 2. Update recognition cache if registered person
-        if name != "Unknown" and conf > 0.40:
+        if name != "Unknown" and conf >= 0.65:
             recognition_cache[track_id] = (name, conf, frame_count)
             
         # 3. GLOBAL RE-ID & JOURNEY LOGGING
         global_id = None
         
         # Case A: Person is recognized as Registered
-        if name != "Unknown" and conf > 0.40:
+        if name != "Unknown" and conf >= 0.65:
             global_id = name
         
         # Case B: Person is Unknown - attempt Global Re-ID
@@ -1407,76 +1405,70 @@ async def api_camera_daily_stats():
 @app.post("/api/toggle_recording")
 async def toggle_recording(camera_id: str = Form(...)):
     with writer_lock:
-        if camera_id in camera_writers:
-            # Stop recording
-            writer_data = camera_writers.pop(camera_id)
-            
-            # Stop the recording thread
-            if camera_id in recording_stop_events:
-                recording_stop_events[camera_id].set()
-                if camera_id in recording_threads:
-                    recording_threads[camera_id].join(timeout=5)
-                    del recording_threads[camera_id]
-                del recording_stop_events[camera_id]
-            
-            # Close FFmpeg process
-            if "process" in writer_data:
-                try:
-                    writer_data["process"].stdin.close()
-                    writer_data["process"].wait(timeout=10)
-                except Exception:
-                    writer_data["process"].kill()
-            
-            db_manager.end_recording(writer_data["db_id"])
-            print(f"[Recording:{camera_id}] Stopped direct stream")
-            return {"status": "success", "recording": False}
-        else:
-            # Start recording
-            with results_lock:
-                data = camera_results.get(camera_id, {})
-                frame = data.get("rendered_frame")
-            if frame is None:
-                return {"status": "error", "message": "Camera offline or warming up"}
-                
-            h, w = frame.shape[:2]
-            ist_now = get_ist_time()
-            timestamp = ist_now.strftime("%Y%m%d_%H%M%S")
-            filename = f"rec_{camera_id}_{timestamp}.mp4"
-            local_path = f"{LOCAL_RECORDINGS_DIR}/{filename}"
-            
-            os.makedirs(LOCAL_RECORDINGS_DIR, exist_ok=True)
-            import subprocess
-            ffmpeg_cmd = [
-                "ffmpeg", "-y", "-f", "rawvideo", "-vcodec", "rawvideo",
-                "-s", f"{w}x{h}", "-pix_fmt", "bgr24", "-r", "20",
-                "-i", "-", "-vcodec", "libx264", "-pix_fmt", "yuv420p", "-preset", "ultrafast", "-crf", "28",
-                "-tune", "zerolatency", local_path
-            ]
-            
+        is_recording = camera_id in camera_writers
+        writer_data = camera_writers.pop(camera_id, None) if is_recording else None
+
+    if is_recording and writer_data:
+        # Stop
+        if camera_id in recording_stop_events:
+            recording_stop_events[camera_id].set()
+            if camera_id in recording_threads:
+                recording_threads[camera_id].join(timeout=5)
+                del recording_threads[camera_id]
+            del recording_stop_events[camera_id]
+        proc = writer_data.get("process")
+        if proc:
             try:
-                p_ffmpeg = subprocess.Popen(ffmpeg_cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                db_id = db_manager.start_recording(camera_id, local_path)
-                
-                stop_event = threading.Event()
-                thread = threading.Thread(target=recording_writer_thread, args=(camera_id, stop_event), daemon=True)
-                thread.start()
-                
-                camera_writers[camera_id] = {
-                    "process": p_ffmpeg,
-                    "db_id": db_id,
-                    "start_time": ist_now,
-                    "file_path": local_path,
-                    "camera_id": camera_id,
-                    "w": w, "h": h
-                }
-                recording_threads[camera_id] = thread
-                recording_stop_events[camera_id] = stop_event
-                
-                print(f"[Recording:{camera_id}] Started direct stream to {local_path}")
-                return {"status": "success", "recording": True}
-            except Exception as e:
-                print(f"[Recording:{camera_id}] Start failure: {e}")
-                return {"status": "error", "message": f"FFmpeg error: {e}"}
+                proc.stdin.close()
+                proc.wait(timeout=10)
+            except Exception:
+                proc.kill()
+        db_manager.end_recording(writer_data["db_id"])
+        print(f"[Recording:{camera_id}] Stopped")
+        return {"status": "success", "recording": False}
+
+    # Start — get frame dims outside any lock
+    with results_lock:
+        data = camera_results.get(camera_id, {})
+        frame = data.get("rendered_frame")
+    if frame is None:
+        return {"status": "error", "message": "Camera offline or warming up"}
+
+    h, w = frame.shape[:2]
+    ist_now = get_ist_time()
+    timestamp = ist_now.strftime("%Y%m%d_%H%M%S")
+    local_path = f"{LOCAL_RECORDINGS_DIR}/rec_{camera_id}_{timestamp}.mp4"
+    os.makedirs(LOCAL_RECORDINGS_DIR, exist_ok=True)
+
+    ffmpeg_cmd = [
+        "ffmpeg", "-y", "-f", "rawvideo", "-vcodec", "rawvideo",
+        "-s", f"{w}x{h}", "-pix_fmt", "bgr24", "-r", "2",
+        "-i", "-", "-vcodec", "libx264", "-pix_fmt", "yuv420p",
+        "-preset", "ultrafast", "-crf", "28", "-tune", "zerolatency",
+        local_path
+    ]
+    try:
+        p_ffmpeg = subprocess.Popen(
+            ffmpeg_cmd, stdin=subprocess.PIPE,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        db_id = db_manager.start_recording(camera_id, local_path)
+        stop_event = threading.Event()
+        thread = threading.Thread(
+            target=recording_writer_thread, args=(camera_id, stop_event, p_ffmpeg), daemon=True)
+        thread.start()
+        with writer_lock:
+            camera_writers[camera_id] = {
+                "process": p_ffmpeg, "db_id": db_id,
+                "start_time": ist_now, "file_path": local_path,
+                "camera_id": camera_id, "w": w, "h": h
+            }
+        recording_threads[camera_id] = thread
+        recording_stop_events[camera_id] = stop_event
+        print(f"[Recording:{camera_id}] Started → {local_path}")
+        return {"status": "success", "recording": True}
+    except Exception as e:
+        print(f"[Recording:{camera_id}] Start failure: {e}")
+        return {"status": "error", "message": f"FFmpeg error: {e}"}
 
 @app.get("/api/recording_status")
 async def get_recording_status():
@@ -1807,81 +1799,80 @@ async def get_camera_settings(camera_id: str):
 @app.post("/api/camera_settings/{camera_id}")
 async def set_camera_settings(camera_id: str, enabled: bool = Form(...)):
     """Set recording settings for a camera and start/stop actual recording."""
-    # Save setting to database
     db_manager.set_camera_recording(camera_id, enabled)
-    
-    # Actually start/stop the recording
-    with writer_lock:
-        if enabled:
-            # Start recording if not already recording
-            if camera_id not in camera_writers:
-                # Get frame dimensions from camera results
-                with results_lock:
-                    data = camera_results.get(camera_id, {})
-                    frame = data.get("rendered_frame")
-                    if frame is None:
-                        return {"status": "error", "message": "Camera not streaming"}
-                    h, w = frame.shape[:2]
-                
-                # Setup optimized FFmpeg recording
-                ist_now = get_ist_time()
-                timestamp = ist_now.strftime("%Y%m%d_%H%M%S")
-                filename = f"rec_{camera_id}_{timestamp}.mp4"
-                local_path = f"{LOCAL_RECORDINGS_DIR}/{filename}"
-                os.makedirs(LOCAL_RECORDINGS_DIR, exist_ok=True)
-                import subprocess
-                ffmpeg_cmd = [
-                    "ffmpeg", "-y", "-f", "rawvideo", "-vcodec", "rawvideo",
-                    "-s", f"{w}x{h}", "-pix_fmt", "bgr24", "-r", "20",
-                    "-i", "-", "-vcodec", "libx264", "-pix_fmt", "yuv420p", "-preset", "ultrafast", "-crf", "28",
-                    "-tune", "zerolatency", local_path
-                ]
-                
+
+    if enabled:
+        with writer_lock:
+            already = camera_id in camera_writers
+        if already:
+            return {"status": "success", "camera_id": camera_id, "recording_enabled": True}
+
+        # Grab frame dimensions OUTSIDE writer_lock to avoid deadlock
+        with results_lock:
+            data = camera_results.get(camera_id, {})
+            frame = data.get("rendered_frame")
+        if frame is None:
+            return {"status": "error", "message": "Camera not streaming yet — try again in a moment"}
+        h, w = frame.shape[:2]
+
+        ist_now = get_ist_time()
+        timestamp = ist_now.strftime("%Y%m%d_%H%M%S")
+        filename = f"rec_{camera_id}_{timestamp}.mp4"
+        local_path = f"{LOCAL_RECORDINGS_DIR}/{filename}"
+        os.makedirs(LOCAL_RECORDINGS_DIR, exist_ok=True)
+
+        ffmpeg_cmd = [
+            "ffmpeg", "-y", "-f", "rawvideo", "-vcodec", "rawvideo",
+            "-s", f"{w}x{h}", "-pix_fmt", "bgr24", "-r", "2",
+            "-i", "-", "-vcodec", "libx264", "-pix_fmt", "yuv420p",
+            "-preset", "ultrafast", "-crf", "28", "-tune", "zerolatency",
+            local_path
+        ]
+        try:
+            p_ffmpeg = subprocess.Popen(
+                ffmpeg_cmd, stdin=subprocess.PIPE,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            db_id = db_manager.start_recording(camera_id, local_path)
+            stop_event = threading.Event()
+            # Set camera_writers BEFORE starting thread to avoid race condition
+            with writer_lock:
+                camera_writers[camera_id] = {
+                    "process": p_ffmpeg, "db_id": db_id,
+                    "start_time": ist_now, "file_path": local_path,
+                    "camera_id": camera_id, "w": w, "h": h
+                }
+            thread = threading.Thread(
+                target=recording_writer_thread, args=(camera_id, stop_event, p_ffmpeg), daemon=True)
+            thread.start()
+            recording_threads[camera_id] = thread
+            recording_stop_events[camera_id] = stop_event
+            print(f"[Recording:{camera_id}] Started → {local_path}")
+        except Exception as e:
+            logger.error(f"Failed to start FFmpeg: {e}")
+            return {"status": "error", "message": str(e)}
+
+    else:
+        with writer_lock:
+            writer_data = camera_writers.pop(camera_id, None)
+        if writer_data:
+            # Signal thread to stop
+            if camera_id in recording_stop_events:
+                recording_stop_events[camera_id].set()
+                if camera_id in recording_threads:
+                    recording_threads[camera_id].join(timeout=5)
+                    del recording_threads[camera_id]
+                del recording_stop_events[camera_id]
+            # Close FFmpeg
+            proc = writer_data.get("process")
+            if proc:
                 try:
-                    p_ffmpeg = subprocess.Popen(ffmpeg_cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                    db_id = db_manager.start_recording(camera_id, local_path)
-                    
-                    stop_event = threading.Event()
-                    thread = threading.Thread(target=recording_writer_thread, args=(camera_id, stop_event), daemon=True)
-                    thread.start()
-                    
-                    camera_writers[camera_id] = {
-                        "process": p_ffmpeg,
-                        "db_id": db_id,
-                        "start_time": ist_now,
-                        "file_path": local_path,
-                        "camera_id": camera_id,
-                        "w": w, "h": h
-                    }
-                    recording_threads[camera_id] = thread
-                    recording_stop_events[camera_id] = stop_event
-                    print(f"[Recording:{camera_id}] Constant Stream started (FFmpeg)")
-                except Exception as e:
-                    logger.error(f"Failed to start FFmpeg recording: {e}")
-                    return {"status": "error", "message": str(e)}
-        else:
-            # Stop recording if currently recording
-            if camera_id in camera_writers:
-                writer_data = camera_writers.pop(camera_id)
-                # Stop the recording thread
-                if camera_id in recording_stop_events:
-                    recording_stop_events[camera_id].set()
-                    if camera_id in recording_threads:
-                        recording_threads[camera_id].join(timeout=5)
-                        del recording_threads[camera_id]
-                    del recording_stop_events[camera_id]
-                
-                # Close FFmpeg process
-                if "process" in writer_data:
-                    try:
-                        writer_data["process"].stdin.close()
-                        writer_data["process"].wait(timeout=10)
-                    except Exception:
-                        writer_data["process"].kill()
-                
-                db_manager.end_recording(writer_data["db_id"])
-                print(f"[Recording:{camera_id}] Stopped direct stream")
-    
+                    proc.stdin.close()
+                    proc.wait(timeout=10)
+                except Exception:
+                    proc.kill()
+            db_manager.end_recording(writer_data["db_id"])
+            print(f"[Recording:{camera_id}] Stopped")
+
     return {"status": "success", "camera_id": camera_id, "recording_enabled": enabled}
 
 # ---------------------------------------------------------------------------
