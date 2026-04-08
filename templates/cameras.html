@@ -263,8 +263,9 @@ async function toggleRec(id){
   try{
     const r=await fetch(`/api/camera_settings/${id}`);
     const d=await r.json();
+    const newState = d.recording_enabled ? 'false' : 'true';
     const fd=new FormData();
-    fd.append('enabled',!d.recording_enabled);
+    fd.append('enabled', newState);
     const res=await fetch(`/api/camera_settings/${id}`,{method:'POST',body:fd});
     const result=await res.json();
     if(result.status==='error'){

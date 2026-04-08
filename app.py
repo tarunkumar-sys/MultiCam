@@ -1817,11 +1817,13 @@ async def get_camera_settings(camera_id: str):
     return {"camera_id": camera_id, "recording_enabled": bool(db_setting), "actually_recording": actually_recording}
 
 @app.post("/api/camera_settings/{camera_id}")
-async def set_camera_settings(camera_id: str, enabled: bool = Form(...)):
+async def set_camera_settings(camera_id: str, enabled: str = Form(...)):
     """Set recording settings for a camera and start/stop actual recording."""
-    db_manager.set_camera_recording(camera_id, enabled)
+    # Accept true/false/1/0/on/off from any client
+    enable = enabled.lower() in ("true", "1", "on", "yes")
+    db_manager.set_camera_recording(camera_id, enable)
 
-    if enabled:
+    if enable:
         with writer_lock:
             already = camera_id in camera_writers
         if already:
@@ -1893,7 +1895,7 @@ async def set_camera_settings(camera_id: str, enabled: bool = Form(...)):
             db_manager.end_recording(writer_data["db_id"])
             print(f"[Recording:{camera_id}] Stopped")
 
-    return {"status": "success", "camera_id": camera_id, "recording_enabled": enabled}
+    return {"status": "success", "camera_id": camera_id, "recording_enabled": enable}
 
 # ---------------------------------------------------------------------------
 # Detection Snapshots API
