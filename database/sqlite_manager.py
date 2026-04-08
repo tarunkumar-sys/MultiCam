@@ -180,6 +180,19 @@ class SqliteManager:
                 conn.commit()
         except Exception as e: logger.error(f"✗ Error removing camera: {e}")
 
+    def update_camera_source(self, camera_id, new_source):
+        try:
+            with self._get_connection() as conn:
+                conn.execute('''
+                    UPDATE cameras SET source = ?, updated_at = ?
+                    WHERE camera_id = ?
+                ''', (str(new_source), datetime.utcnow(), camera_id))
+                conn.commit()
+            return True
+        except Exception as e:
+            logger.error(f"✗ Error updating camera source: {e}")
+            return False
+
     def get_cameras(self):
         try:
             with self._get_connection() as conn:

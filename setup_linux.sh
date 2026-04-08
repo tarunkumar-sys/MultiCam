@@ -20,12 +20,15 @@ echo "[3/6] Upgrading pip..."
 pip install --upgrade pip
 
 echo "[4/6] Installing Python dependencies..."
-# Install CPU-only torch first to avoid pulling CUDA (~2GB)
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+# Install CUDA-enabled torch for GPU acceleration (Task 2)
+pip install torch torchvision
 pip install -r requirements.txt
 
 echo "[5/6] Creating workspace directories..."
-mkdir -p snapshots dataset recordings database
+mkdir -p snapshots dataset recordings
+if [ -d ".venv" ]; then
+    source .venv/bin/activate 2>/dev/null || source .venv/Scripts/activate 2>/dev/null
+fi
 
 echo "[6/6] Done. Run the app with:"
-echo "  source .venv/bin/activate && python app.py"
+echo "  bash start.sh"

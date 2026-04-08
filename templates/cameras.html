@@ -59,22 +59,48 @@ input:checked+.slider:before{transform:translateX(20px);}
 .btn:hover{background:var(--bg-secondary);}
 .btn-danger{background:#e74c3c;border-color:#e74c3c;color:#fff;}
 .btn-danger:hover{background:#c0392b;}
-/* add camera form */
-.add-panel{background:var(--bg-panel);border:1px solid var(--border-color);border-radius:10px;box-shadow:var(--shadow);overflow:hidden;position:sticky;top:0;}
-.add-panel-header{background:var(--accent);padding:16px 20px;color:#fff;font-weight:700;font-size:14px;letter-spacing:.5px;}
-.add-panel-body{padding:24px;}
-.form-group{margin-bottom:18px;}
-.form-group label{display:block;margin-bottom:7px;font-size:12px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;}
-.form-group input,.form-group select{width:100%;padding:10px 14px;background:var(--bg-secondary);border:1.5px solid var(--border-color);border-radius:8px;color:var(--text-primary);font-size:13px;outline:none;transition:.2s;}
-.form-group input:focus,.form-group select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(196,30,58,.1);}
-.btn-submit{width:100%;padding:12px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer;transition:.2s;letter-spacing:.5px;}
-.btn-submit:hover{background:var(--accent-hover);transform:translateY(-1px);}
-.btn-submit:disabled{opacity:.6;cursor:not-allowed;transform:none;}
-.msg{padding:10px 14px;border-radius:6px;font-size:13px;margin-top:12px;display:none;}
-.msg.success{background:#d4edda;color:#155724;border:1px solid #c3e6cb;}
-.msg.error{background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;}
-[data-theme="dark"] .msg.success{background:rgba(39,174,96,.15);color:#6fcf97;border-color:rgba(39,174,96,.3);}
-[data-theme="dark"] .msg.error{background:rgba(231,76,60,.15);color:#ff8a80;border-color:rgba(231,76,60,.3);}
+.btn-edit{background:#2196f3;border-color:#2196f3;color:#fff;}
+.btn-edit:hover{background:#1976d2;}
+
+/* Modal Styles */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.5);
+    backdrop-filter: blur(4px);
+}
+.modal-content {
+    background-color: var(--bg-panel);
+    margin: 10% auto;
+    padding: 24px;
+    border: 1px solid var(--border-color);
+    width: 400px;
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    animation: slideDown 0.3s ease-out;
+}
+@keyframes slideDown {
+    from { transform: translateY(-20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+.modal-header {
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-color);
+    font-weight: 700;
+    color: var(--text-primary);
+}
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 20px;
+}
 .source-hint{font-size:11px;color:var(--text-secondary);margin-top:5px;}
 </style>
 </head>
@@ -139,42 +165,35 @@ input:checked+.slider:before{transform:translateX(20px);}
               <th>Name</th>
               <th>Source</th>
               <th>Status</th>
-              <th>Record</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody id="camera-list">
-            <tr><td colspan="5" style="padding:20px;text-align:center;"><div class="bone bone-square" style="height:13px;width:60%;margin:auto;"></div></td></tr>
+            <tr><td colspan="4" style="padding:20px;text-align:center;"><div class="bone bone-square" style="height:13px;width:60%;margin:auto;"></div></td></tr>
           </tbody>
         </table>
       </div>
 
-      <!-- RIGHT: Add camera form -->
-      <div class="add-panel">
-        <div class="add-panel-header">➕ ADD NEW CAMERA</div>
-        <div class="add-panel-body">
-          <form id="add-form">
+      </div>
+
+      <!-- Edit Modal -->
+      <div id="editModal" class="modal">
+        <div class="modal-content">
+          <div class="modal-header">Edit Camera Source</div>
+          <form id="edit-form">
+            <input type="hidden" id="edit-camera-id" name="camera_id">
             <div class="form-group">
-              <label>Camera Name / ID</label>
-              <input type="text" name="camera_id" placeholder="e.g. Gate-1, Lobby" required>
+                <label>Camera ID</label>
+                <input type="text" id="display-camera-id" disabled>
             </div>
             <div class="form-group">
-              <label>Camera Type</label>
-              <select name="camera_type" id="cam-type" onchange="updateSourceHint()">
-                <option value="webcam">Webcam (Local)</option>
-                <option value="rtsp">RTSP / IP Camera</option>
-                <option value="ipwebcam">IP Webcam App</option>
-                <option value="droidcam">DroidCam</option>
-                <option value="mjpeg">MJPEG Stream</option>
-              </select>
+              <label>New Source / URL</label>
+              <input type="text" id="edit-source" name="source" placeholder="e.g. 0 or rtsp://..." required>
             </div>
-            <div class="form-group">
-              <label>Source / URL</label>
-              <input type="text" name="source" id="cam-source" placeholder="0" required>
-              <div class="source-hint" id="source-hint">Enter webcam index (0 for default)</div>
+            <div class="modal-footer">
+              <button type="button" class="btn" onclick="closeEditModal()">Cancel</button>
+              <button type="submit" class="btn btn-edit">Save Changes</button>
             </div>
-            <button type="submit" class="btn-submit" id="add-btn">INITIALIZE CAMERA</button>
-            <div class="msg" id="add-msg"></div>
           </form>
         </div>
       </div>
@@ -233,57 +252,50 @@ async function loadCameras(){
     tbody.innerHTML=cams.map(c=>`
       <tr>
         <td style="font-weight:600;">${c.id}</td>
-        <td style="font-size:12px;color:var(--text-secondary);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${c.source}">${c.source||'—'}</td>
+        <td style="font-size:12px;color:var(--text-secondary);max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${c.source}">${c.source||'—'}</td>
         <td><span class="status-online">● Online</span></td>
-        <td><button class="rec-btn rec-off" id="rec-${c.id}" onclick="toggleRec('${c.id}')">…</button></td>
         <td style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button class="btn btn-edit" onclick="openEditModal('${c.id}', '${c.source}')">Edit</button>
           <button class="btn" onclick="viewLogs('${c.id}')">Logs</button>
           <button class="btn btn-danger" onclick="removeCamera('${c.id}')">Remove</button>
         </td>
       </tr>`).join('');
-    cams.forEach(c=>loadRecState(c.id));
   }catch(e){}
 }
 
-async function loadRecState(id){
-  try{
-    const r=await fetch(`/api/camera_settings/${id}`);
-    const d=await r.json();
-    const btn=document.getElementById('rec-'+id);
-    if(!btn)return;
-    const on=d.actually_recording;
-    btn.textContent=on?'REC ON':'REC OFF';
-    btn.className='rec-btn '+(on?'rec-on':'rec-off');
-  }catch(e){}
+function openEditModal(id, source){
+    document.getElementById('edit-camera-id').value = id;
+    document.getElementById('display-camera-id').value = id;
+    document.getElementById('edit-source').value = source;
+    document.getElementById('editModal').style.display = 'block';
 }
 
-async function toggleRec(id){
-  const btn=document.getElementById('rec-'+id);
-  if(btn){btn.disabled=true;btn.textContent='...';}
-  try{
-    const r=await fetch(`/api/camera_settings/${id}`);
-    const d=await r.json();
-    const newState = d.recording_enabled ? 'false' : 'true';
-    const fd=new FormData();
-    fd.append('enabled', newState);
-    const res=await fetch(`/api/camera_settings/${id}`,{method:'POST',body:fd});
-    const result=await res.json();
-    if(result.status==='error'){
-      alert('Recording error: '+result.message);
+function closeEditModal(){
+    document.getElementById('editModal').style.display = 'none';
+}
+
+document.getElementById('edit-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const data = Object.fromEntries(fd);
+    
+    try {
+        const res = await fetch('/api/update_camera', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+        const result = await res.json();
+        if(result.status === 'success'){
+            closeEditModal();
+            loadCameras();
+        } else {
+            alert('Error: ' + result.message);
+        }
+    } catch(err) {
+        alert('Update failed: ' + err.message);
     }
-    // Wait a moment then verify FFmpeg is actually alive
-    setTimeout(async()=>{
-      const sr=await fetch('/api/recording_status');
-      const sd=await sr.json();
-      const entry=sd.active_recordings[id];
-      if(entry && !entry.ffmpeg_alive){
-        alert(`[${id}] FFmpeg started but exited immediately. Check server console for FFmpeg error output.`);
-      }
-      await loadRecState(id);
-    }, 800);
-  }catch(e){alert('Error: '+e.message);}
-  if(btn)btn.disabled=false;
-}
+});
 
 async function removeCamera(id){
   if(!confirm(`Remove camera "${id}"?`))return;
@@ -293,39 +305,6 @@ async function removeCamera(id){
 
 function viewLogs(id){location.href=`/detection_logs?camera_id=${id}`;}
 
-// Add camera form
-document.getElementById('add-form').addEventListener('submit',async e=>{
-  e.preventDefault();
-  const btn=document.getElementById('add-btn');
-  const msg=document.getElementById('add-msg');
-  btn.disabled=true;btn.textContent='Connecting…';
-  msg.style.display='none';
-
-  const fd=new FormData(e.target);
-  const data=Object.fromEntries(fd);
-  try{
-    const res=await fetch('/api/add_camera',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify(data)
-    });
-    const result=await res.json();
-    if(result.status==='success'){
-      msg.textContent='✓ Camera added successfully!';
-      msg.className='msg success';msg.style.display='block';
-      e.target.reset();updateSourceHint();
-      loadCameras();
-      setTimeout(()=>{msg.style.display='none';},3000);
-    }else{
-      msg.textContent='✗ '+( result.message||'Failed to connect');
-      msg.className='msg error';msg.style.display='block';
-    }
-  }catch(err){
-    msg.textContent='✗ Connection error: '+err.message;
-    msg.className='msg error';msg.style.display='block';
-  }
-  btn.disabled=false;btn.textContent='INITIALIZE CAMERA';
-});
 
 // Nav active
 function setActiveNav(){

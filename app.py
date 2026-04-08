@@ -345,6 +345,10 @@ ALERT_COOLDOWN_SECONDS = 30 # Don't log same intrusion for 30s
 recording_threads: Dict[str, Any] = {}
 recording_stop_events: Dict[str, threading.Event] = {}
 
+# Adaptive Recording state
+camera_last_detection: Dict[str, float] = {} # {camera_id: timestamp}
+recording_start_lock = threading.Lock()
+
 # Resource management
 recognition_executor = ThreadPoolExecutor(max_workers=4)
 transfer_queue = queue.Queue(maxsize=100)
@@ -483,9 +487,9 @@ active_search_lock = threading.Lock()
 
 def process_camera(camera_id: str):
     """Background thread per camera: detection + tracking + face recognition.
-    Process exactly 2 FPS for high accuracy with reduced system load.
+    Adaptive FPS mode: Targets smooth output (up to 20 FPS) on capable hardware.
     """
-    print(f"[Camera:{camera_id}] Processing thread started (2 FPS mode)")
+    print(f"[Camera:{camera_id}] Processing thread started (Adaptive FPS mode)")
     
     # Wait for camera to be ready
     warmup_frames = 0
@@ -494,53 +498,17 @@ def process_camera(camera_id: str):
         if frame is not None:
             warmup_frames += 1
         time.sleep(0.1)
-    print(f"[Camera:{camera_id}] Camera ready - Processing at 2 FPS")
+    print(f"[Camera:{camera_id}] Camera ready - Processing at Adaptive FPS")
     
-    # Check if recording should be started automatically
-    import subprocess
-    import os
-    db_setting = db_manager.get_camera_recording_setting(camera_id)
-    if db_setting == 1:
-        with writer_lock:
-            if camera_id not in camera_writers:
-                try:
-                    # Dimensions should be known from dummy get_camera_frame_with_id
-                    h, w = frame.shape[:2]
-                    ist_now = get_ist_time()
-                    timestamp = ist_now.strftime("%Y%m%d_%H%M%S")
-                    filename = f"rec_{camera_id}_{timestamp}.mp4"
-                    local_path = f"{LOCAL_RECORDINGS_DIR}/{filename}"
-                    os.makedirs(LOCAL_RECORDINGS_DIR, exist_ok=True)
-                    
-                    ffmpeg_cmd = [
-                        "ffmpeg", "-y", "-f", "rawvideo", "-vcodec", "rawvideo",
-                        "-s", f"{w}x{h}", "-pix_fmt", "bgr24", "-r", "20",
-                        "-i", "-", "-vcodec", "libx264", "-pix_fmt", "yuv420p", "-preset", "ultrafast", "-crf", "28",
-                        "-tune", "zerolatency", local_path
-                    ]
-                    
-                    p_ffmpeg = subprocess.Popen(ffmpeg_cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                    db_id = db_manager.start_recording(camera_id, local_path)
-                    stop_event = threading.Event()
-                    # Set camera_writers BEFORE starting thread to avoid race condition
-                    camera_writers[camera_id] = {
-                        "process": p_ffmpeg,
-                        "db_id": db_id,
-                        "start_time": ist_now,
-                        "file_path": local_path,
-                        "camera_id": camera_id,
-                        "w": w, "h": h
-                    }
-                    r_thread = threading.Thread(target=recording_writer_thread, args=(camera_id, stop_event, p_ffmpeg), daemon=True)
-                    r_thread.start()
-                    recording_threads[camera_id] = r_thread
-                    recording_stop_events[camera_id] = stop_event
-                    print(f"[Recording:{camera_id}] Auto-started (FFmpeg)")
-                except Exception as err:
-                    logger.error(f"Failed to auto-start FFmpeg for {camera_id}: {err}")
+    # Initialize inactivity tracker
+    camera_last_detection[camera_id] = 0
+    
+    # Initial auto-start based on DB is removed as per Task 3 (Always on person detect)
+    # However, we'll keep the logic template for the main loop to use
     
     # Tracker: max_age=8 (4s at 2FPS), low IoU threshold for fast movers
-    tracker: ObjectTracker = ObjectTracker(max_age=8, n_init=1, iou_threshold=0.15)
+    # Tracker: max_age=50 (2.5s at 20fps), low IoU threshold for fast movers
+    tracker: ObjectTracker = ObjectTracker(max_age=50, n_init=1, iou_threshold=0.10)
     last_frame_id: int = -1
     frame_count: int = 0
     
@@ -548,7 +516,7 @@ def process_camera(camera_id: str):
     FRAME_INTERVAL: float = 0.5  # 500ms = 2 FPS
     
     # Recognition cache: track_id -> (name, confidence, frame_number)
-    RECOGNITION_CACHE_FRAMES: int = 6  # Cache valid for 6 frames (~3s at 2 FPS)
+    RECOGNITION_CACHE_FRAMES: int = 2000  # Sticky cache for the duration of the track
     recognition_cache: Dict[Any, tuple] = {}
     
     # Track IDs currently in frame (to prevent double counting)
@@ -561,11 +529,12 @@ def process_camera(camera_id: str):
     last_process_time: float = 0
 
     while True:
-        # Wait for next 2 FPS interval
+        # Dynamic FPS: Capped at ~20 FPS (50ms) but runs faster if GPU allows
+        TARGET_INTERVAL: float = 0.05 # 20 FPS max
         current_time = time.time()
         elapsed = current_time - last_process_time
-        if elapsed < FRAME_INTERVAL:
-            time.sleep(FRAME_INTERVAL - elapsed)
+        if elapsed < TARGET_INTERVAL:
+            time.sleep(TARGET_INTERVAL - elapsed)
         
         frame, frame_id = camera_manager.get_camera_frame_with_id(camera_id)
         if frame is None:
@@ -579,10 +548,13 @@ def process_camera(camera_id: str):
         try:
             h, w = frame.shape[:2]
             
-            # Run detection on EVERY frame (2 FPS) for high accuracy
             detections = detector.detect(frame)
             
-            # Run recognition on EVERY frame (2 FPS) - no skip
+            # Run recognition - reduced frequency at High FPS to save GPU
+            # Only run recognition on every 5th frame if FPS > 10
+            skip_recognition = False
+            if frame_count % 5 != 0:
+                skip_recognition = True
             
             # Update tracker
             tracks = tracker.update(detections, frame)
@@ -638,33 +610,34 @@ def process_camera(camera_id: str):
                     "stable": True
                 })
 
-            # 3. Submit for Face Recognition (Worker Thread)
-            for t in processed:
-                tid = t["id"]
-                # Skip if cache is still fresh
-                if tid in recognition_cache and (frame_count - recognition_cache[tid][2]) < (RECOGNITION_CACHE_FRAMES // 2):
-                    continue
-                
-                # Cooldown: 4s if already identified, 1s if unknown (retry faster)
-                now = time.time()
-                with cooldown_lock:
-                    last_time = recognition_cooldowns.get((camera_id, tid), 0)
-                    cooldown = 4.0 if t["name"] != "Unknown" else 1.0
-                    if now - last_time < cooldown:
+            # 3. Submit for Face Recognition (Worker Thread) - Skip logic applied here
+            if not skip_recognition:
+                for t in processed:
+                    tid = t["id"]
+                    # Skip if cache is still fresh
+                    if tid in recognition_cache and (frame_count - recognition_cache[tid][2]) < (RECOGNITION_CACHE_FRAMES // 2):
                         continue
-                    recognition_cooldowns[(camera_id, tid)] = now
+                    
+                    # Cooldown: 4s if already identified, 1s if unknown (retry faster)
+                    now = time.time()
+                    with cooldown_lock:
+                        last_time = recognition_cooldowns.get((camera_id, tid), 0)
+                        cooldown = 4.0 if t["name"] != "Unknown" else 1.0
+                        if now - last_time < cooldown:
+                            continue
+                        recognition_cooldowns[(camera_id, tid)] = now
 
-                bx1, by1, bx2, by2 = [int(v) for v in t["bbox"]]
-                # Pass full body bbox — recognizer uses MTCNN internally to find tight face
-                body_box = [bx1, by1, bx2, by2]
+                    bx1, by1, bx2, by2 = [int(v) for v in t["bbox"]]
+                    # Pass full body bbox — recognizer uses MTCNN internally to find tight face
+                    body_box = [bx1, by1, bx2, by2]
 
-                try:
-                    recognition_executor.submit(
-                        self_recognition_worker,
-                        frame.copy(), body_box, tid, recognition_cache, frame_count,
-                        face_encoding_cache, track_merge_map, camera_id
-                    )
-                except RuntimeError: break
+                    try:
+                        recognition_executor.submit(
+                            self_recognition_worker,
+                            frame.copy(), body_box, tid, recognition_cache, frame_count,
+                            face_encoding_cache, track_merge_map, camera_id
+                        )
+                    except RuntimeError: break
 
             # Render at full rate - every frame gets overlay
             record_frame = frame.copy()
@@ -739,8 +712,12 @@ def process_camera(camera_id: str):
                     if people_count > 0:
                         # Use IST timestamp
                         now_ist = get_ist_time()
-                        timestamp = now_ist.strftime("%Y%m%d_%H%M%S")
-                        local_snapshot_path = f"{SNAPSHOTS_DIR}/{camera_id}/snapshot_{timestamp}.jpg"
+                        day_folder = now_ist.strftime("%Y-%m-%d")
+                        timestamp = now_ist.strftime("%H%M%S")
+                        
+                        target_dir = os.path.join(SNAPSHOTS_DIR, day_folder, camera_id)
+                        os.makedirs(target_dir, exist_ok=True)
+                        local_snapshot_path = os.path.join(target_dir, f"snapshot_{timestamp}.jpg")
                         
                         # Save bbox data as JSON and capture encodings
                         import json
@@ -824,8 +801,12 @@ def process_camera(camera_id: str):
             if registered_detected:
                 try:
                     ist_now = get_ist_time()
-                    timestamp = ist_now.strftime("%Y%m%d_%H%M%S")
-                    local_snapshot_path = f"{SNAPSHOTS_DIR}/{camera_id}/registered_{timestamp}.jpg"
+                    day_folder = ist_now.strftime("%Y-%m-%d")
+                    timestamp = ist_now.strftime("%H%M%S")
+                    
+                    target_dir = os.path.join(SNAPSHOTS_DIR, day_folder, camera_id)
+                    os.makedirs(target_dir, exist_ok=True)
+                    local_snapshot_path = os.path.join(target_dir, f"registered_{timestamp}.jpg")
                     
                     # Prepare bbox data as object
                     bbox_data = [{
@@ -855,47 +836,130 @@ def process_camera(camera_id: str):
                 except Exception as e:
                     print(f"[Camera:{camera_id}] Registered person snapshot error: {e}")
 
-            # Auto-split recording every 2.5 hours (9000 seconds)
+            # -------------------------------------------------------------------
+            # ADAPTIVE RECORDING LOGIC (Task 3 & 4)
+            # -------------------------------------------------------------------
             with writer_lock:
-                writer_data = camera_writers.get(camera_id)
-                if writer_data and "process" in writer_data:
+                now_ts = time.time()
+                is_currently_recording = camera_id in camera_writers
+                
+                # Update last detection time
+                if len(processed) > 0:
+                    camera_last_detection[camera_id] = now_ts
+
+                time_since_last_detection = now_ts - camera_last_detection.get(camera_id, 0)
+                
+                # LOGIC: Start recording if person is detected
+                if len(processed) > 0 and not is_currently_recording:
+                    try:
+                        h, w = frame.shape[:2]
+                        ist_now = get_ist_time()
+                        day_folder = ist_now.strftime("%Y-%m-%d")
+                        timestamp = ist_now.strftime("%H%M%S")
+                        
+                        # Hierarchy: recordings/YYYY-MM-DD/camera_id/
+                        target_dir = os.path.join(RECORDINGS_DIR, day_folder, camera_id)
+                        os.makedirs(target_dir, exist_ok=True)
+                        
+                        filename = f"rec_{timestamp}.mp4"
+                        local_path = os.path.join(target_dir, filename)
+                        
+                        ffmpeg_cmd = [
+                            "ffmpeg", "-y", "-f", "rawvideo", "-vcodec", "rawvideo",
+                            "-s", f"{w}x{h}", "-pix_fmt", "bgr24", "-r", "20",
+                            "-i", "-", "-vcodec", "libx264", "-pix_fmt", "yuv420p", 
+                            "-preset", "ultrafast", "-crf", "28", "-tune", "zerolatency", local_path
+                        ]
+                        
+                        p_ffmpeg = subprocess.Popen(ffmpeg_cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        db_id = db_manager.start_recording(camera_id, local_path)
+                        stop_event = threading.Event()
+                        
+                        camera_writers[camera_id] = {
+                            "process": p_ffmpeg,
+                            "db_id": db_id,
+                            "start_time": ist_now,
+                            "file_path": local_path,
+                            "camera_id": camera_id,
+                            "w": w, "h": h,
+                            "last_write": now_ts
+                        }
+                        r_thread = threading.Thread(target=recording_writer_thread, args=(camera_id, stop_event, p_ffmpeg), daemon=True)
+                        r_thread.start()
+                        recording_threads[camera_id] = r_thread
+                        recording_stop_events[camera_id] = stop_event
+                        print(f"[Recording:{camera_id}] Person Detected - Auto-started FFmpeg")
+                        
+                    except Exception as err:
+                        logger.error(f"Failed to start FFmpeg for {camera_id}: {err}")
+
+                # LOGIC: Stop recording if no movement for 5 minutes (300s)
+                elif is_currently_recording and time_since_last_detection > 300:
+                    try:
+                        writer_data = camera_writers[camera_id]
+                        stop_event = recording_stop_events.get(camera_id)
+                        if stop_event: stop_event.set()
+                        
+                        writer_data["process"].stdin.close()
+                        writer_data["process"].wait(timeout=10)
+                        db_manager.end_recording(writer_data["db_id"])
+                        
+                        del camera_writers[camera_id]
+                        if camera_id in recording_threads: del recording_threads[camera_id]
+                        if camera_id in recording_stop_events: del recording_stop_events[camera_id]
+                        print(f"[Recording:{camera_id}] Inactive for 5min - Auto-stopped FFmpeg")
+                    except Exception as e:
+                        print(f"[Recording:{camera_id}] Stop error: {e}")
+
+                # LOGIC: Auto-split every 2 hours (7200s)
+                elif is_currently_recording:
                     ist_now = get_ist_time()
-                    recording_duration = (ist_now - writer_data["start_time"]).total_seconds()
-                    if recording_duration > 9000:  # 2.5 hours
+                    writer_data = camera_writers[camera_id]
+                    duration = (ist_now - writer_data["start_time"]).total_seconds()
+                    
+                    if duration > 7200: # 2 hours
                         try:
+                            # Stop current segment
+                            stop_event = recording_stop_events.get(camera_id)
+                            if stop_event: stop_event.set()
                             writer_data["process"].stdin.close()
                             writer_data["process"].wait(timeout=10)
                             db_manager.end_recording(writer_data["db_id"])
-                            print(f"[Recording] Auto-split {camera_id} after {recording_duration/3600:.1f} hours")
                             
-                            new_timestamp = ist_now.strftime("%Y%m%d_%H%M%S")
-                            new_filename = f"rec_{camera_id}_{new_timestamp}.mp4"
-                            new_local_path = f"{RECORDINGS_DIR}/{new_filename}"
+                            # Start new segment immediately
+                            day_folder = ist_now.strftime("%Y-%m-%d")
+                            timestamp = ist_now.strftime("%H%M%S")
+                            target_dir = os.path.join(RECORDINGS_DIR, day_folder, camera_id)
+                            os.makedirs(target_dir, exist_ok=True)
+                            local_path = os.path.join(target_dir, f"rec_{timestamp}.mp4")
                             
-                            os.makedirs(RECORDINGS_DIR, exist_ok=True)
                             ffmpeg_cmd = [
                                 "ffmpeg", "-y", "-f", "rawvideo", "-vcodec", "rawvideo",
                                 "-s", f"{writer_data['w']}x{writer_data['h']}", "-pix_fmt", "bgr24", "-r", "20",
-                                "-i", "-", "-vcodec", "libx264", "-pix_fmt", "yuv420p", "-preset", "ultrafast", "-crf", "28",
-                                "-tune", "zerolatency", new_local_path
+                                "-i", "-", "-vcodec", "libx264", "-pix_fmt", "yuv420p", 
+                                "-preset", "ultrafast", "-crf", "28", "-tune", "zerolatency", local_path
                             ]
                             
                             p_ffmpeg = subprocess.Popen(ffmpeg_cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                            new_db_id = db_manager.start_recording(camera_id, new_local_path)
+                            new_db_id = db_manager.start_recording(camera_id, local_path)
+                            new_stop_event = threading.Event()
+                            
                             camera_writers[camera_id] = {
                                 "process": p_ffmpeg,
                                 "db_id": new_db_id,
                                 "start_time": ist_now,
-                                "file_path": new_local_path,
+                                "file_path": local_path,
                                 "camera_id": camera_id,
-                                "w": writer_data["w"],
-                                "h": writer_data["h"]
+                                "w": writer_data['w'], "h": writer_data['h'],
+                                "last_write": now_ts
                             }
-                            print(f"[Recording] Started new segment {camera_id} direct to {new_local_path}")
+                            r_thread = threading.Thread(target=recording_writer_thread, args=(camera_id, new_stop_event, p_ffmpeg), daemon=True)
+                            r_thread.start()
+                            recording_threads[camera_id] = r_thread
+                            recording_stop_events[camera_id] = new_stop_event
+                            print(f"[Recording:{camera_id}] 2hr Limit Hit - Segmented new video")
                         except Exception as e:
-                            print(f"[Camera:{camera_id}] Error auto-splitting recording: {e}")
-            
-            # No frame rate limiting - run as fast as possible for smooth video
+                            print(f"[Recording:{camera_id}] Split error: {e}")
 
         except Exception as e:
             print(f"[Camera:{camera_id}] Error: {e}")
@@ -978,9 +1042,12 @@ def self_recognition_worker(frame, face_box, track_id, recognition_cache, frame_
 
             if is_new_link or should_log:
                     now_ist = get_ist_time()
-                    ts_str = now_ist.strftime("%Y%m%d_%H%M%S")
-                    sighting_path = f"snapshots/{camera_id}/journey_{global_id}_{ts_str}.jpg"
-                    os.makedirs(os.path.dirname(sighting_path), exist_ok=True)
+                    day_folder = now_ist.strftime("%Y-%m-%d")
+                    ts_str = now_ist.strftime("%H%M%S")
+                    
+                    target_dir = os.path.join(SNAPSHOTS_DIR, day_folder, camera_id)
+                    os.makedirs(target_dir, exist_ok=True)
+                    sighting_path = os.path.join(target_dir, f"journey_{global_id}_{ts_str}.jpg")
                     
                     try:
                         _, full_buf = cv2.imencode('.jpg', frame,
@@ -1344,6 +1411,41 @@ async def delete_camera(camera_id: str):
     
     return {"status": "success", "message": f"Camera {camera_id} removed"}
 
+
+@app.post("/api/update_camera")
+async def update_camera(request: Request):
+    """Update an existing camera's source URL/index."""
+    if not require_auth(request):
+        raise HTTPException(status_code=401)
+    
+    try:
+        data = await request.json()
+        camera_id = data.get("camera_id")
+        new_source = data.get("source")
+        
+        if not camera_id or new_source is None:
+            return {"status": "error", "message": "Missing camera_id or source"}
+
+        # 1. Stop existing processing for this camera
+        camera_manager.remove_camera(camera_id)
+        
+        # 2. Update in DB
+        success = db_manager.update_camera_source(camera_id, new_source)
+        
+        # 3. Restart camera with new source
+        parsed_source = new_source
+        if str(new_source).isdigit():
+            parsed_source = int(new_source)
+        
+        if camera_manager.add_camera(camera_id, parsed_source):
+            threading.Thread(target=process_camera, args=(camera_id,), daemon=True).start()
+            return {"status": "success", "message": f"Camera {camera_id} updated and restarted"}
+        else:
+            return {"status": "error", "message": "Failed to restart camera with new source"}
+            
+    except Exception as e:
+        logger.error(f"Error updating camera: {e}")
+        return {"status": "error", "message": str(e)}
 
 @app.get("/api/cameras")
 async def api_cameras():
