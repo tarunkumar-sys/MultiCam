@@ -219,6 +219,32 @@
         }
         .btn-refresh:hover { background: var(--accent-hover); }
 
+        /* Pagination */
+        .pagination {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-top: 20px; padding: 14px 20px;
+            background: var(--bg-panel); border-radius: 10px;
+            border: 1px solid var(--border-color);
+        }
+        .pagination-info { font-size: 13px; color: var(--text-secondary); }
+        .pagination-controls { display: flex; gap: 6px; align-items: center; }
+        .page-btn {
+            min-width: 36px; height: 36px; padding: 0 10px;
+            border: 1px solid var(--border-color);
+            background: var(--bg-panel); color: var(--text-primary);
+            border-radius: 6px; cursor: pointer; font-size: 13px;
+            font-weight: 600; transition: all 0.15s;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .page-btn:hover:not(:disabled) { background: var(--accent); color: #fff; border-color: var(--accent); }
+        .page-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+        .page-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+        .page-size-select {
+            padding: 6px 10px; border: 1px solid var(--border-color);
+            background: var(--bg-panel); color: var(--text-primary);
+            border-radius: 6px; font-size: 13px; outline: none;
+        }
+
         /* Logs Table */
         .logs-table {
             width: 100%;
@@ -424,7 +450,15 @@
                             <option value="">Full System Audit</option>
                         </select>
                     </div>
-                    <button class="btn-refresh" onclick="loadLogs()">REFRESH AUDIT</button>
+                    <div class="filter-group">
+                        <label>Per Page</label>
+                        <select class="page-size-select" id="pageSizeSelect" onchange="changePageSize()">
+                            <option value="20">20</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                        </select>
+                    </div>
+                    <button class="btn-refresh" onclick="goToPage(1)">REFRESH</button>
                 </div>
 
                 <table class="logs-table" id="logsTable">
@@ -446,6 +480,12 @@
                         <tr><td style="padding:14px 20px;"><div class="bone bone-square" style="height:13px;width:60%;"></div></td><td style="padding:14px 20px;"><div class="bone bone-square" style="height:13px;width:80%;"></div></td><td style="padding:14px 20px;"><div class="bone bone-square" style="height:13px;width:70%;"></div></td><td style="padding:14px 20px;"><div class="bone bone-square" style="height:13px;width:40%;"></div></td><td style="padding:14px 20px;"><div class="bone bone-badge bone-rounded"></div></td><td style="padding:14px 20px;"><div class="bone bone-btn bone-rounded"></div></td></tr>
                     </tbody>
                 </table>
+
+                <!-- Pagination -->
+                <div class="pagination" id="paginationBar" style="display:none;">
+                    <div class="pagination-info" id="pageInfo">Showing 0–0 of 0</div>
+                    <div class="pagination-controls" id="pageControls"></div>
+                </div>
             </div>
         </div>
     </div>
@@ -537,71 +577,125 @@
         const urlParams = new URLSearchParams(window.location.search);
         const preselectedCamera = urlParams.get('camera_id');
 
-        // Load cameras for filter
         let camerasList = [];
-        // Load cameras for filter
+        let currentPage = 1;
+        let totalItems = 0;
+
+        function getPageSize() {
+            return parseInt(document.getElementById('pageSizeSelect').value) || 20;
+        }
+
+        function changePageSize() { goToPage(1); }
+
+        function goToPage(page) {
+            currentPage = page;
+            loadLogs();
+        }
+
         async function loadCameras() {
             try {
                 const res = await fetch('/api/cameras');
                 camerasList = await res.json();
                 const select = document.getElementById('camera-filter');
                 select.innerHTML = '<option value="">All Cameras</option>' +
-                    camerasList.map(cam => `<option value="${cam.id}" ${cam.id === preselectedCamera ? 'selected' : ''}>${cam.id}</option>`).join('');
-            } catch (err) {
-                console.error('Failed to load cameras:', err);
-            }
+                    camerasList.map(cam =>
+                        `<option value="${cam.id}" ${cam.id === preselectedCamera ? 'selected' : ''}>${cam.id}</option>`
+                    ).join('');
+            } catch (err) {}
         }
 
-        // Load detection logs
         async function loadLogs() {
             const tbody = document.getElementById('logsBody');
             const cameraId = document.getElementById('camera-filter').value;
-            // Show skeleton table rows while fetching
-            Boneyard.tableRows('logsBody', 6, 4);
+            const pageSize = getPageSize();
+            const skip = (currentPage - 1) * pageSize;
+
+            Boneyard.tableRows('logsBody', 6, 6);
+
             try {
-                const url = cameraId ? `/api/detection_snapshots?camera_id=${cameraId}&limit=50` : '/api/detection_snapshots?limit=50';
+                let url = `/api/detection_snapshots?limit=${pageSize}&skip=${skip}`;
+                if (cameraId) url += `&camera_id=${encodeURIComponent(cameraId)}`;
+
                 const res = await fetch(url);
-                const logs = await res.json();
-                
+                const data = await res.json();
+
+                // Handle both old array format and new paginated format
+                const logs  = Array.isArray(data) ? data : (data.items || []);
+                totalItems  = Array.isArray(data) ? logs.length : (data.total || logs.length);
+
                 if (logs.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No detection logs found</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-secondary);">No snapshots found</td></tr>';
+                    document.getElementById('paginationBar').style.display = 'none';
                     return;
                 }
-                
+
                 tbody.innerHTML = logs.map(log => {
-                    const timeStr = log.timestamp; // Already formatted by backend
-                    const imageUrl = `/api/snapshot_image?path=${encodeURIComponent(log.snapshot_path)}`;
-                    
-                    const cam = camerasList.find(c => c.id === log.camera_id) || {id: log.camera_id, source: 'Unknown'};
-                    let camIp = cam.source || 'N/A';
+                    const ts = log.timestamp
+                        ? (typeof log.timestamp === 'string'
+                            ? new Date(log.timestamp).toLocaleString('en-IN', {timeZone:'Asia/Kolkata',hour12:true})
+                            : log.timestamp)
+                        : '—';
+
+                    const cam = camerasList.find(c => c.id === log.camera_id) || {};
+                    let camIp = cam.source || '—';
                     if (camIp.includes('@')) camIp = camIp.split('@').pop().split(':')[0].split('/')[0];
 
-                    // Registered persons badges
-                    const registeredPersons = log.registered_persons || [];
-                    const personTags = registeredPersons.length > 0
-                        ? registeredPersons.map(p => `<span class="person-tag">${p}</span>`).join('')
-                        : '<span style="color:#aaa;">-</span>';
-                    const rowBg = log.has_registered_person ? 'background: #fff8f8;' : '';
-                    
-                    const logData = JSON.stringify(log).replace(/'/g, "\\'");
+                    const bbox = log.bbox_data || [];
+                    const names = bbox.map(b => b.name).filter(n => n && n !== 'Unknown');
+                    const personTags = names.length
+                        ? names.map(n => `<span class="person-tag">${n}</span>`).join('')
+                        : `<span style="color:var(--text-secondary)">${log.person_count || 0} persons</span>`;
 
+                    const safe = encodeURIComponent(JSON.stringify(log));
                     return `
-                        <tr style="border-bottom: 1px solid #eee; ${rowBg}">
-                            <td>${timeStr}</td>
+                        <tr>
+                            <td>${ts}</td>
                             <td>${log.camera_id}</td>
                             <td>${log.camera_id}</td>
                             <td>${camIp}</td>
                             <td>${personTags}</td>
                             <td>
-                                <button class="view-btn" title="View Snapshot" onclick='openModal(${logData})'></button>
+                                <button class="view-btn" title="View Snapshot"
+                                    onclick='openModal(JSON.parse(decodeURIComponent("${safe}")))'></button>
                             </td>
-                        </tr>
-                    `;
+                        </tr>`;
                 }).join('');
+
+                renderPagination(totalItems, pageSize);
+
             } catch (err) {
-                console.error('Failed to load logs:', err);
-                tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Failed to load logs</td></tr>';
+                console.error(err);
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-secondary);">Failed to load</td></tr>';
             }
+        }
+
+        function renderPagination(total, pageSize) {
+            const totalPages = Math.ceil(total / pageSize);
+            const bar = document.getElementById('paginationBar');
+            const info = document.getElementById('pageInfo');
+            const controls = document.getElementById('pageControls');
+
+            if (totalPages <= 1) { bar.style.display = 'none'; return; }
+            bar.style.display = 'flex';
+
+            const from = (currentPage - 1) * pageSize + 1;
+            const to   = Math.min(currentPage * pageSize, total);
+            info.textContent = `Showing ${from}–${to} of ${total}`;
+
+            // Build page buttons — show window of 5 around current
+            let html = `<button class="page-btn" onclick="goToPage(${currentPage-1})" ${currentPage===1?'disabled':''}>‹</button>`;
+
+            const delta = 2;
+            let start = Math.max(1, currentPage - delta);
+            let end   = Math.min(totalPages, currentPage + delta);
+            if (start > 1) html += `<button class="page-btn" onclick="goToPage(1)">1</button>${start>2?'<span style="padding:0 4px;color:var(--text-secondary)">…</span>':''}`;
+            for (let p = start; p <= end; p++) {
+                html += `<button class="page-btn ${p===currentPage?'active':''}" onclick="goToPage(${p})">${p}</button>`;
+            }
+            if (end < totalPages) html += `${end<totalPages-1?'<span style="padding:0 4px;color:var(--text-secondary)">…</span>':''}<button class="page-btn" onclick="goToPage(${totalPages})">${totalPages}</button>`;
+            html += `<button class="page-btn" onclick="goToPage(${currentPage+1})" ${currentPage===totalPages?'disabled':''}>›</button>`;
+
+            controls.innerHTML = html;
         }
 
         // Open image modal
@@ -648,8 +742,8 @@
                 setInterval(updateLiveClock, 1000);
             });
             startNotificationListener();
-            loadCameras();
-            loadLogs();
+            loadCameras().then(() => goToPage(1));
+            document.getElementById('camera-filter').addEventListener('change', () => goToPage(1));
             setActiveNav();
         });
 

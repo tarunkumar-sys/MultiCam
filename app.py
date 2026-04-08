@@ -226,9 +226,12 @@ camera_manager = CameraManager()
 recognizer.load_known_faces(db_manager)
 reid_manager = GlobalReIDManager(db_manager)
 
-# Global ID mapping: (camera_id, track_id) -> global_id (Unknown ID or Registered Name)
+# Global ID mapping: (camera_id, track_id) -> global_id
 global_reid_assignments: Dict[tuple, str] = {}
 reid_lock = threading.Lock()
+# Daily re-log set: {(camera_id, global_id, date_str)} — ensures each person
+# gets a journey entry once per day even if their track_id doesn't change
+reid_daily_logged: set = set()
 
 class NotificationManager:
     """Manages real-time event broadcasting to multiple web clients via SSE."""
@@ -761,8 +764,9 @@ def process_camera(camera_id: str):
 
                         bbox_data = snapshot_processed
                         
-                        # Encode to JPEG in memory
-                        _, buffer = cv2.imencode('.jpg', record_frame)
+                        # Encode to JPEG with compression (quality 60 = ~70% smaller)
+                        encode_params = [cv2.IMWRITE_JPEG_QUALITY, 60, cv2.IMWRITE_JPEG_OPTIMIZE, 1]
+                        _, buffer = cv2.imencode('.jpg', record_frame, encode_params)
                         img_bytes = buffer.tobytes()
                         
                         # Save directly to local storage
@@ -821,8 +825,9 @@ def process_camera(camera_id: str):
                         "name": t["name"]
                     } for t in processed if t["name"] != "Unknown"]
                     
-                    # Encode to JPEG in memory
-                    _, buffer = cv2.imencode('.jpg', record_frame)
+                    # Encode to JPEG with compression
+                    encode_params = [cv2.IMWRITE_JPEG_QUALITY, 60, cv2.IMWRITE_JPEG_OPTIMIZE, 1]
+                    _, buffer = cv2.imencode('.jpg', record_frame, encode_params)
                     img_bytes = buffer.tobytes()
                     
                     def on_reg_snapshot_complete(success, _cam=camera_id, _detected=list(registered_detected), _path=local_snapshot_path, _bbox=bbox_data, _ts=ist_now):
@@ -949,26 +954,34 @@ def self_recognition_worker(frame, face_box, track_id, recognition_cache, frame_
         # Update global mapping and log sighting
         if global_id:
             with reid_lock:
-                # Only update if changed or new
                 old_gid = global_reid_assignments.get((camera_id, track_id))
-                if old_gid != global_id:
+                is_new_link = (old_gid != global_id)
+                if is_new_link:
                     global_reid_assignments[(camera_id, track_id)] = global_id
-                    
-                    # 1. Take a journey snapshot
+
+                # Log journey once per day per (camera, global_id) — keeps 24h total accurate
+                now_ist = get_ist_time()
+                day_key = (camera_id, str(global_id), now_ist.strftime("%Y%m%d"))
+                should_log = day_key not in reid_daily_logged
+
+                if should_log:
+                    reid_daily_logged.add(day_key)
+
+            if is_new_link or should_log:
                     now_ist = get_ist_time()
                     ts_str = now_ist.strftime("%Y%m%d_%H%M%S")
                     sighting_path = f"snapshots/{camera_id}/journey_{global_id}_{ts_str}.jpg"
                     os.makedirs(os.path.dirname(sighting_path), exist_ok=True)
                     
                     try:
-                        _, full_buf = cv2.imencode('.jpg', frame)
+                        _, full_buf = cv2.imencode('.jpg', frame,
+                            [cv2.IMWRITE_JPEG_QUALITY, 60, cv2.IMWRITE_JPEG_OPTIMIZE, 1])
                         with open(sighting_path, 'wb') as f:
                             f.write(full_buf.tobytes())
                     except Exception as e:
                         print(f"[Worker] Snapshot save failed: {e}")
                         sighting_path = None
                     
-                    # 2. Log to Database
                     db_manager.log_journey_event(
                         global_id=global_id,
                         camera_id=camera_id,
@@ -976,10 +989,10 @@ def self_recognition_worker(frame, face_box, track_id, recognition_cache, frame_
                         timestamp=now_ist
                     )
                     
-                    # 3. Broadcast ONLY for registered/known persons — not every unknown
+                    # Broadcast ONLY for registered/known persons
                     try:
                         is_registered = "U-" not in str(global_id)
-                        if is_registered:
+                        if is_registered and is_new_link:
                             thumb_url = f"https://ui-avatars.com/api/?name={str(global_id)}&background=e8192c&color=fff"
                             notification_manager.broadcast({
                                 "type": "registered_person",
@@ -990,7 +1003,8 @@ def self_recognition_worker(frame, face_box, track_id, recognition_cache, frame_
                             })
                     except Exception: pass
                     
-                    print(f"[Global Re-ID] Linked {camera_id}:{track_id} -> {global_id}")
+                    if is_new_link:
+                        print(f"[Global Re-ID] Linked {camera_id}:{track_id} -> {global_id}")
 
     except Exception as e:
         print(f"[Worker Error] {e}")
@@ -1875,20 +1889,31 @@ async def set_camera_settings(camera_id: str, enabled: bool = Form(...)):
 # ---------------------------------------------------------------------------
 
 @app.get("/api/detection_snapshots")
-async def get_detection_snapshots(camera_id: Optional[str] = None, limit: int = 100):
-    """Get detection snapshots with bounding boxes."""
-    snapshots = db_manager.get_detection_snapshots(camera_id=camera_id, limit=limit)
-    return [
-        {
-            "id": s[0],
-            "camera_id": s[1],
-            "timestamp": s[2],
-            "person_count": s[3],
-            "snapshot_path": s[4],
-            "bbox_data": s[5]
-        }
-        for s in snapshots
-    ]
+async def get_detection_snapshots(
+    camera_id: Optional[str] = None,
+    limit: int = 20,
+    skip: int = 0
+):
+    """Get detection snapshots with pagination."""
+    snapshots = db_manager.get_detection_snapshots(
+        camera_id=camera_id, limit=limit, skip=skip)
+    total = db_manager.count_detection_snapshots(camera_id=camera_id)
+    return {
+        "items": [
+            {
+                "id": s[0],
+                "camera_id": s[1],
+                "timestamp": s[2].isoformat() if hasattr(s[2], 'isoformat') else s[2],
+                "person_count": s[3],
+                "snapshot_path": s[4],
+                "bbox_data": s[5]
+            }
+            for s in snapshots
+        ],
+        "total": total,
+        "skip": skip,
+        "limit": limit
+    }
 
 @app.get("/api/snapshot/{snapshot_id}")
 async def get_snapshot(snapshot_id: str):
@@ -2290,6 +2315,85 @@ async def search_video_by_image(file: UploadFile = File(...), video_ids: str = F
         "total_segments": total_segments,
         "videos_searched": len(video_ids_list)
     }
+
+
+@app.post("/api/upload_video_and_search")
+async def upload_video_and_search(
+    video: UploadFile = File(...),
+    person_image: Optional[UploadFile] = File(None),
+    person_name: Optional[str] = Form(None),
+):
+    """
+    Upload a video file + either a person image or registered person name.
+    Scans the uploaded video and returns timeline segments where the person appears.
+    """
+    # 1. Save uploaded video to a temp path
+    import tempfile
+    suffix = os.path.splitext(video.filename)[1] or ".mp4"
+    tmp_video = tempfile.NamedTemporaryFile(delete=False, suffix=suffix,
+                                            dir=RECORDINGS_DIR)
+    try:
+        content = await video.read()
+        tmp_video.write(content)
+        tmp_video.flush()
+        tmp_video.close()
+        video_path = tmp_video.name
+
+        # 2. Get target encoding
+        target_encoding = None
+        display_name = "Unknown"
+
+        if person_name:
+            persons = db_manager.get_registered_persons()
+            target = next((p for p in persons if p[1].lower() == person_name.lower()), None)
+            if target is None:
+                return {"status": "error", "message": f"Person '{person_name}' not registered"}
+            target_encoding = np.frombuffer(target[3], dtype=np.float32)
+            display_name = target[1]
+
+        elif person_image:
+            img_bytes = await person_image.read()
+            nparr = np.frombuffer(img_bytes, np.uint8)
+            img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            if img is None:
+                return {"status": "error", "message": "Invalid image file"}
+            target_encoding = recognizer.get_encoding(img)
+            if target_encoding is None:
+                return {"status": "error", "message": "No face detected in uploaded image"}
+            display_name = "Uploaded Person"
+        else:
+            return {"status": "error", "message": "Provide person_name or person_image"}
+
+        # 3. Scan video
+        segments = scan_video_for_person(video_path, target_encoding)
+
+        # 4. Register the uploaded video in DB so it can be played back
+        ist_now = get_ist_time()
+        db_id = db_manager.start_recording("uploaded", video_path)
+        db_manager.end_recording(db_id)
+
+        results = []
+        for seg in segments:
+            results.append({
+                **seg,
+                "video_id": db_id,
+                "video_name": video.filename,
+                "video_path": video_path,
+                "camera_id": "uploaded",
+                "person_name": display_name,
+            })
+
+        return {
+            "status": "success",
+            "results": results,
+            "total_segments": len(results),
+            "video_id": db_id,
+            "video_path": video_path,
+            "person_name": display_name,
+        }
+    except Exception as e:
+        logger.error(f"[UploadVideoSearch] {e}")
+        return {"status": "error", "message": str(e)}
 
 
 # ---------------------------------------------------------------------------

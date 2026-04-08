@@ -1116,7 +1116,7 @@
             updateDailyStats();
             setInterval(updateCounts, 2000);
             setInterval(updateRecognized, 4000);
-            setInterval(updateDailyStats, 5 * 60 * 1000);
+            setInterval(updateDailyStats, 30 * 1000); // refresh every 30s
         }
 
         async function updateDailyStats() {

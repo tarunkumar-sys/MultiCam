@@ -348,7 +348,7 @@ class SqliteManager:
             logger.error(f"✗ Error logging snapshot: {e}")
             return None
 
-    def get_detection_snapshots(self, camera_id=None, start_time=None, end_time=None, limit=100):
+    def get_detection_snapshots(self, camera_id=None, start_time=None, end_time=None, limit=20, skip=0):
         try:
             query = "SELECT id, camera_id, timestamp, person_count, snapshot_path, bbox_data, person_crops FROM detection_snapshots WHERE 1=1"
             params = []
@@ -362,8 +362,8 @@ class SqliteManager:
                 query += " AND timestamp <= ?"
                 params.append(end_time.isoformat() if hasattr(end_time, 'isoformat') else end_time)
             
-            query += " ORDER BY timestamp DESC LIMIT ?"
-            params.append(limit)
+            query += " ORDER BY timestamp DESC LIMIT ? OFFSET ?"
+            params.extend([limit, skip])
             
             with self._get_connection() as conn:
                 rows = conn.execute(query, params).fetchall()
@@ -380,6 +380,19 @@ class SqliteManager:
         except Exception as e:
             logger.error(f"Error getting snapshots: {e}")
             return []
+
+    def count_detection_snapshots(self, camera_id=None):
+        try:
+            query = "SELECT COUNT(*) as cnt FROM detection_snapshots WHERE 1=1"
+            params = []
+            if camera_id:
+                query += " AND camera_id = ?"
+                params.append(camera_id)
+            with self._get_connection() as conn:
+                row = conn.execute(query, params).fetchone()
+                return row["cnt"] if row else 0
+        except Exception:
+            return 0
 
     def get_snapshot(self, snapshot_id):
         try:
@@ -577,15 +590,15 @@ class SqliteManager:
     def get_camera_daily_person_stats(self):
         """
         Returns unique person count seen today per camera.
-        Uses global_identities last_seen + journeys table for per-camera breakdown.
-        Total = number of distinct global_ids seen on this camera today.
+        Counts distinct global_ids from journeys logged today.
+        Also falls back to occupancy_logs max if journeys is empty.
         """
         try:
             now = datetime.now(IST)
             today_start = now.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
 
             with self._get_connection() as conn:
-                # Count distinct global_ids per camera seen today
+                # Primary: distinct global_ids per camera from journeys today
                 rows = conn.execute('''
                     SELECT camera_id, COUNT(DISTINCT global_id) as unique_count
                     FROM journeys
@@ -593,13 +606,27 @@ class SqliteManager:
                     GROUP BY camera_id
                 ''', (today_start,)).fetchall()
 
+                journey_stats = {r["camera_id"]: r["unique_count"] for r in rows}
+
+                # Fallback: if no journeys yet, use max occupancy count today
+                occ_rows = conn.execute('''
+                    SELECT camera_id, MAX(count) as peak
+                    FROM occupancy_logs
+                    WHERE timestamp >= ?
+                    GROUP BY camera_id
+                ''', (today_start,)).fetchall()
+
             stats = {}
-            for r in rows:
-                stats[r["camera_id"]] = {
-                    "total": r["unique_count"],
-                    "am": 0,   # kept for API compatibility
-                    "pm": 0
-                }
+            all_cams = set(list(journey_stats.keys()) + [r["camera_id"] for r in occ_rows])
+            occ_map = {r["camera_id"]: r["peak"] for r in occ_rows}
+
+            for cam in all_cams:
+                j = journey_stats.get(cam, 0)
+                o = occ_map.get(cam, 0)
+                # Use whichever is higher — journeys count unique people,
+                # occupancy peak is a lower bound when face detection hasn't fired yet
+                stats[cam] = {"total": max(j, o), "am": 0, "pm": 0}
+
             return stats
         except Exception as e:
             logger.error(f"get_camera_daily_person_stats error: {e}")
