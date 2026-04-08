@@ -624,6 +624,26 @@
         @keyframes blink {
             0%,100% { opacity: 1; } 50% { opacity: 0.3; }
         }
+        /* Always-visible controls bar at bottom of feed */
+        .feed-controls-bar {
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            padding: 8px 10px;
+            background: linear-gradient(transparent, rgba(0,0,0,0.75));
+            display: flex; justify-content: space-between; align-items: center;
+            z-index: 6;
+        }
+        .feed-btn {
+            background: rgba(255,255,255,0.15);
+            border: 1px solid rgba(255,255,255,0.25);
+            color: #fff; width: 32px; height: 32px;
+            cursor: pointer; border-radius: 6px; font-size: 14px;
+            transition: all 0.2s;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .feed-btn:hover { background: rgba(255,255,255,0.3); transform: scale(1.1); }
+        .feed-btn.active-pause { background: #fbbf24; color: #000; border-color: #d97706; }
+        .feed-btn-expand { font-size: 16px; }
         /* Camera action buttons */
         .cam-actions {
             display: flex;
@@ -783,12 +803,30 @@
         </div>
     </div>
 
-    <!-- Fullscreen Modal - Clean with only IP and Close -->
+    <!-- Fullscreen Modal -->
     <div class="modal" id="fullscreenModal">
-        <div class="modal-ip-overlay" id="modalIpOverlay">Camera IP</div>
-        <button class="modal-close-btn" onclick="closeFullscreen()">&times;</button>
+        <!-- Top bar -->
+        <div style="position:absolute;top:0;left:0;right:0;padding:14px 20px;
+             background:linear-gradient(rgba(0,0,0,0.8),transparent);
+             display:flex;justify-content:space-between;align-items:center;z-index:1001;">
+            <div style="display:flex;gap:10px;align-items:center;">
+                <span id="modalCamName" style="color:#fff;font-weight:700;font-size:15px;"></span>
+                <!-- Live count HUD in fullscreen -->
+                <div class="hud-pill hud-live" style="pointer-events:none;">
+                    <span class="hud-dot"></span><span>Live</span>
+                    <strong id="fs-count">0</strong>
+                </div>
+                <div class="hud-pill hud-total" style="pointer-events:none;">
+                    <span>24h</span><strong id="fs-total">–</strong>
+                </div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;">
+                <button class="feed-btn" id="fs-pause-btn" onclick="togglePauseFullscreen()" title="Pause/Play">⏸</button>
+                <button class="modal-close-btn" onclick="closeFullscreen()" style="position:static;width:36px;height:36px;font-size:20px;">&times;</button>
+            </div>
+        </div>
         <div class="modal-body" id="modalBody">
-            <img id="modalImg" src="" alt="Camera Feed">
+            <img id="modalImg" src="" alt="Camera Feed" style="max-width:100%;max-height:100%;object-fit:contain;">
         </div>
     </div>
 
@@ -865,11 +903,11 @@
                             <span class="live-badge">● LIVE</span>
                         </div>
                     </div>
-                    <div class="camera-feed" id="feed-container-${cam.id}" onclick="openFullscreen('${cam.id}')">
+                    <div class="camera-feed" id="feed-container-${cam.id}">
                         <img id="feed-img-${cam.id}" src="/video_feed/${cam.id}" alt="${cam.id}" loading="lazy">
                         <div class="pause-indicator">⏸</div>
 
-                        <!-- Always-visible count HUD -->
+                        <!-- Always-visible count HUD top-left -->
                         <div class="count-hud">
                             <div class="hud-pill hud-live">
                                 <span class="hud-dot"></span>
@@ -882,23 +920,19 @@
                             </div>
                         </div>
 
-                        <div class="feed-overlay">
-                            <div class="overlay-top">
-                                <span class="recognized-names" id="rec-${cam.id}"></span>
-                                <div class="feed-controls">
-                                    <button class="feed-btn" id="pause-btn-${cam.id}" 
-                                            onclick="event.stopPropagation(); togglePause('${cam.id}')"
-                                            title="Pause/Play Stream">⏸</button>
-                                    <button class="feed-btn" 
-                                            onclick="event.stopPropagation(); takeScreenshot('${cam.id}')"
-                                            title="Take Screenshot">📸</button>
-                                </div>
-                            </div>
-                            <div class="overlay-bottom">
-                                <div></div>
-                                <button class="fullscreen-btn" onclick="event.stopPropagation(); openFullscreen('${cam.id}')">
-                                    Full Expand
-                                </button>
+                        <!-- Always-visible controls bottom-right -->
+                        <div class="feed-controls-bar">
+                            <span class="recognized-names" id="rec-${cam.id}"></span>
+                            <div style="display:flex;gap:6px;align-items:center;">
+                                <button class="feed-btn" id="pause-btn-${cam.id}"
+                                        onclick="event.stopPropagation(); togglePause('${cam.id}')"
+                                        title="Pause/Play">⏸</button>
+                                <button class="feed-btn"
+                                        onclick="event.stopPropagation(); takeScreenshot('${cam.id}')"
+                                        title="Screenshot">📸</button>
+                                <button class="feed-btn feed-btn-expand"
+                                        onclick="event.stopPropagation(); openFullscreen('${cam.id}')"
+                                        title="Fullscreen">⛶</button>
                             </div>
                         </div>
                     </div>
@@ -906,18 +940,61 @@
             `).join('');
         }
 
+        // Track which cam is open in fullscreen
+        let _fsCamId = null;
+        let _fsPaused = false;
+
         function openFullscreen(camId) {
+            _fsCamId = camId;
+            _fsPaused = false;
             const cam = cameras.find(c => c.id === camId);
-            document.getElementById('modalIpOverlay').textContent = cam?.source || camId;
+            document.getElementById('modalCamName').textContent = cam?.id || camId;
             document.getElementById('modalImg').src = `/video_feed/${camId}`;
+            document.getElementById('fs-pause-btn').textContent = '⏸';
+            document.getElementById('fs-pause-btn').classList.remove('active-pause');
+            // sync counts
+            const liveEl = document.getElementById(`count-${camId}`);
+            const totEl  = document.getElementById(`total-${camId}`);
+            document.getElementById('fs-count').textContent = liveEl?.textContent || '0';
+            document.getElementById('fs-total').textContent = totEl?.textContent  || '–';
             document.getElementById('fullscreenModal').classList.add('active');
             document.body.style.overflow = 'hidden';
         }
 
         function closeFullscreen() {
-            document.getElementById('fullscreenModal').classList.remove('active');
+            // Kill the stream properly before hiding
             document.getElementById('modalImg').src = '';
+            document.getElementById('fullscreenModal').classList.remove('active');
             document.body.style.overflow = '';
+            _fsCamId = null;
+            _fsPaused = false;
+        }
+
+        async function togglePauseFullscreen() {
+            if (!_fsCamId) return;
+            const btn = document.getElementById('fs-pause-btn');
+            const img = document.getElementById('modalImg');
+            if (_fsPaused) {
+                // Resume
+                _fsPaused = false;
+                img.src = `/video_feed/${_fsCamId}`;
+                btn.textContent = '⏸';
+                btn.classList.remove('active-pause');
+            } else {
+                // Freeze
+                _fsPaused = true;
+                btn.textContent = '▶';
+                btn.classList.add('active-pause');
+                try {
+                    const snap = await fetch(`/api/capture_frame/${_fsCamId}`);
+                    if (snap.ok) {
+                        // Kill stream first, then show frozen frame
+                        img.src = '';
+                        const blob = await snap.blob();
+                        img.src = URL.createObjectURL(blob);
+                    }
+                } catch(e) {}
+            }
         }
 
         function refreshFeeds() {
@@ -932,13 +1009,16 @@
             try {
                 const res = await fetch('/api/occupancy');
                 const data = await res.json();
-                // API returns array: [{camera_id, count, ...}, ...]
                 const arr = Array.isArray(data) ? data : Object.entries(data).map(([id,v])=>({camera_id:id,count:typeof v==='object'?v.count:v}));
                 arr.forEach(item => {
                     const camId = item.camera_id || item.id;
                     const count = item.count ?? 0;
                     const badge = document.getElementById(`count-${camId}`);
                     if (badge) badge.textContent = count;
+                    // sync fullscreen HUD if this cam is open
+                    if (_fsCamId === camId) {
+                        document.getElementById('fs-count').textContent = count;
+                    }
                     const card = document.getElementById(`feed-container-${camId}`)?.closest('.camera-card');
                     if (card) {
                         if (item.alert_active) {
@@ -1046,6 +1126,9 @@
                 Object.entries(stats).forEach(([camId, s]) => {
                     const totEl = document.getElementById(`total-${camId}`);
                     if (totEl) totEl.textContent = (s.total ?? 0);
+                    if (_fsCamId === camId) {
+                        document.getElementById('fs-total').textContent = (s.total ?? 0);
+                    }
                 });
             } catch(e) {}
         }
@@ -1059,14 +1142,14 @@
             if (!feedImg) return;
 
             if (pausedCams.has(camId)) {
-                // Resume
+                // Resume — restart stream
                 pausedCams.delete(camId);
                 container.classList.remove('is-paused');
-                feedImg.src = `/video_feed/${camId}`;
                 btn.textContent = '⏸';
                 btn.classList.remove('active-pause');
+                feedImg.src = `/video_feed/${camId}`;
             } else {
-                // Freeze: grab static frame then stop stream
+                // Freeze — capture frame, kill stream, show frozen image
                 pausedCams.add(camId);
                 container.classList.add('is-paused');
                 btn.textContent = '▶';
@@ -1075,9 +1158,12 @@
                     const snap = await fetch(`/api/capture_frame/${camId}`);
                     if (snap.ok) {
                         const blob = await snap.blob();
+                        // Kill the MJPEG connection FIRST, then show frozen frame
+                        feedImg.src = '';
+                        await new Promise(r => setTimeout(r, 50));
                         feedImg.src = URL.createObjectURL(blob);
                     }
-                } catch(e) { /* keep current frozen frame */ }
+                } catch(e) {}
             }
         }
 

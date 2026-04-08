@@ -575,31 +575,31 @@ class SqliteManager:
         except Exception: return []
 
     def get_camera_daily_person_stats(self):
+        """
+        Returns unique person count seen today per camera.
+        Uses global_identities last_seen + journeys table for per-camera breakdown.
+        Total = number of distinct global_ids seen on this camera today.
+        """
         try:
             now = datetime.now(IST)
-            today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-            noon         = now.replace(hour=12, minute=0, second=0, microsecond=0)
-            today_end    = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+            today_start = now.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
 
-            def get_peak(start, end):
-                with self._get_connection() as conn:
-                    rows = conn.execute('''
-                        SELECT camera_id, MAX(person_count) as peak 
-                        FROM detection_snapshots 
-                        WHERE timestamp >= ? AND timestamp <= ? 
-                        GROUP BY camera_id
-                    ''', (start.isoformat(), end.isoformat())).fetchall()
-                    return {r["camera_id"]: r["peak"] for r in rows}
+            with self._get_connection() as conn:
+                # Count distinct global_ids per camera seen today
+                rows = conn.execute('''
+                    SELECT camera_id, COUNT(DISTINCT global_id) as unique_count
+                    FROM journeys
+                    WHERE timestamp >= ?
+                    GROUP BY camera_id
+                ''', (today_start,)).fetchall()
 
-            am_data = get_peak(today_start, noon)
-            pm_data = get_peak(noon, today_end)
-
-            all_cameras = set(list(am_data.keys()) + list(pm_data.keys()))
             stats = {}
-            for cam in all_cameras:
-                am = am_data.get(cam, 0)
-                pm = pm_data.get(cam, 0)
-                stats[cam] = {"am": am, "pm": pm, "total": am + pm}
+            for r in rows:
+                stats[r["camera_id"]] = {
+                    "total": r["unique_count"],
+                    "am": 0,   # kept for API compatibility
+                    "pm": 0
+                }
             return stats
         except Exception as e:
             logger.error(f"get_camera_daily_person_stats error: {e}")

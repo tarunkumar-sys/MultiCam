@@ -2,17 +2,15 @@ import numpy as np
 
 class ObjectTracker:
     """IoU-based tracker optimized for all person tracking scenarios."""
-    def __init__(self, max_age=3, n_init=1, iou_threshold=0.25):
-        # max_age=3: Quick recovery from occlusion, but not too long to ghost
+    def __init__(self, max_age=8, n_init=1, iou_threshold=0.15):
+        # max_age=8: at 2 FPS = 4 seconds grace — survives brief occlusion
         self.max_age = max_age
-        self.n_init = n_init  # Only 1 hit needed to start tracking
-        self.iou_threshold = iou_threshold  # Lower threshold for better matching
+        self.n_init = n_init
+        self.iou_threshold = iou_threshold  # Lower = easier to match moving boxes
         self.tracks = []
         self.next_id = 1
         self.frame_count = 0
-        # Face recognition cache: track_id -> face_encoding
         self.face_encodings = {}
-        # Track merge history to prevent double counting same person
         self.merged_tracks = {}
 
     def _compute_iou(self, box1, box2):
@@ -97,18 +95,19 @@ class ObjectTracker:
             if det_idx in matched_det_indices:
                 continue
                 
-            best_dist = 2000  # pixels - larger for fast movement
+            best_dist = float('inf')
             best_track_idx = -1
             
             for track_idx, track in enumerate(self.tracks):
                 if track_idx in matched_track_indices:
                     continue
-                # Only match if track has been seen recently
-                if self.frame_count - track['last_seen'] > 1:
+                # Allow matching tracks unseen for up to max_age frames
+                if self.frame_count - track['last_seen'] > self.max_age:
                     continue
                 dist = self._compute_center_distance(det['bbox'], track['bbox'])
-                # Allow larger movement for distant/small objects
-                max_dist = 300 if track.get('small', False) else 200
+                # Scale allowed distance by how long the track has been missing
+                gap = self.frame_count - track['last_seen']
+                max_dist = 250 + gap * 60  # more lenient the longer they've been gone
                 if dist < best_dist and dist < max_dist:
                     best_dist = dist
                     best_track_idx = track_idx

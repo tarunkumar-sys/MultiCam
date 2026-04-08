@@ -526,8 +526,8 @@ def process_camera(camera_id: str):
                 except Exception as err:
                     logger.error(f"Failed to auto-start FFmpeg for {camera_id}: {err}")
     
-    # Improved tracker: immediate tracking (n_init=1), quick recovery, low IoU threshold
-    tracker: ObjectTracker = ObjectTracker(max_age=3, n_init=1, iou_threshold=0.25)
+    # Tracker: max_age=8 (4s at 2FPS), low IoU threshold for fast movers
+    tracker: ObjectTracker = ObjectTracker(max_age=8, n_init=1, iou_threshold=0.15)
     last_frame_id: int = -1
     frame_count: int = 0
     
