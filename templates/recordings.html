@@ -518,6 +518,16 @@
             pointer-events: none;
             border: 1px solid #444;
         }
+        .date-group-header {
+            background: var(--bg-secondary) !important;
+            font-weight: 800 !important;
+            color: var(--accent) !important;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-size: 11px;
+            padding: 10px 20px !important;
+            border-left: 4px solid var(--accent);
+        }
         .detection-marker:hover .timeline-tooltip {
             display: block;
         }
@@ -1088,16 +1098,28 @@
                     tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-secondary);">No recordings match current filters.</td></tr>';
                     return;
                 }
+                let lastDate = "";
                 tbody.innerHTML = recordings.map(r => {
-                    const startTime = new Date(r.start_time).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: false });
+                    const dt = new Date(r.start_time);
+                    const dateStr = dt.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                    const timeStr = dt.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour12: false });
+                    
+                    let dateHeader = "";
+                    if (dateStr !== lastDate) {
+                        lastDate = dateStr;
+                        dateHeader = `<tr class="date-group-header"><td colspan="4" style="background:#f3f4f6;font-weight:bold;padding:8px;">${dateStr}</td></tr>`;
+                    }
+
                     const duration = r.end_time ? Math.round((new Date(r.end_time) - new Date(r.start_time)) / 60000) + ' min' : 'Recording...';
                     const hasRegistered = r.has_registered_person;
                     const rowClass = hasRegistered ? 'highlight-row' : '';
                     const badge = hasRegistered ? '<span class="status-badge">Registered Person</span>' : '';
                     const recordingData = encodeURIComponent(JSON.stringify(r));
+                    
                     return `
+                        ${dateHeader}
                         <tr class="${rowClass}">
-                            <td style="font-weight: 600;">${startTime}${badge}</td>
+                            <td style="font-weight: 600;">${timeStr}${badge}</td>
                             <td>${r.camera_id}</td>
                             <td>${duration}</td>
                             <td>

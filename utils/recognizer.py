@@ -16,8 +16,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Tuned for InceptionResnetV1 vggface2:
-# cosine similarity >= 0.65 = same person (higher = stricter)
-RECOGNITION_THRESHOLD = 0.65
+# cosine similarity >= 0.58 = same person (higher = stricter, lower = more recognition)
+RECOGNITION_THRESHOLD = 0.58
 
 
 def _cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:

@@ -12,5 +12,5 @@ if [[ "$OSTYPE" == "linux-gnu"* ]]; then
     export OPENCV_VIDEOIO_PRIORITY_MSMF=0
 fi
 
-echo "Starting AI Vigilance on http://0.0.0.0:8000"
-python -m uvicorn app:app --host 0.0.0.0 --port 8000
+echo "Starting AI Vigilance on http://0.0.0.0:8000 (GPU Accelerated)"
+python -m uvicorn app:app --host 0.0.0.0 --port 8000 --timeout-keep-alive 60

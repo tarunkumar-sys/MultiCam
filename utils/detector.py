@@ -9,10 +9,12 @@ class PersonDetector:
         
         try:
             from ultralytics import YOLO
-            self.model = YOLO(model_path)
+            import torch
+            self.device = '0' if torch.cuda.is_available() else 'cpu'
+            self.model = YOLO(model_path).to(self.device)
             self.classes = [0]  # COCO class for person is 0
             self.use_yolo = True
-            print("[PersonDetector] Using YOLOv8 for person detection")
+            print(f"[PersonDetector] Using YOLOv8 on {self.device} for person detection")
         except Exception as e:
             print(f"[PersonDetector] YOLO not available: {e}")
             print("[PersonDetector] Falling back to OpenCV HOG+SVM detector")
@@ -44,7 +46,7 @@ class PersonDetector:
         """YOLOv8 detection optimized for all person detection scenarios."""
         # Lower confidence to catch distant/small persons
         # Higher imgsz for better detection of small/distant objects
-        results = self.model.predict(frame, classes=self.classes, conf=0.35, imgsz=800, verbose=False)
+        results = self.model.predict(frame, classes=self.classes, conf=0.35, imgsz=800, verbose=False, device=self.device)
         detections = []
         h, w = frame.shape[:2]
         

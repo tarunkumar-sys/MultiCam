@@ -378,6 +378,17 @@
         .toast-title { font-weight: 700; font-size: 14px; color: var(--text-primary); }
         .toast-meta { font-size: 11px; color: var(--text-secondary); display: block; }
         .toast-progress { position: absolute; bottom: 0; left: 0; height: 3px; background: var(--accent); width: 100%; }
+        
+        .date-group-header {
+            background: var(--bg-secondary) !important;
+            font-weight: 800 !important;
+            color: var(--accent) !important;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-size: 11px;
+            padding: 10px 20px !important;
+            border-left: 4px solid var(--accent);
+        }
     </style>
 </head>
 <body>
@@ -629,12 +640,17 @@
                     return;
                 }
 
+                let lastDate = "";
                 tbody.innerHTML = logs.map(log => {
-                    const ts = log.timestamp
-                        ? (typeof log.timestamp === 'string'
-                            ? new Date(log.timestamp).toLocaleString('en-IN', {timeZone:'Asia/Kolkata',hour12:true})
-                            : log.timestamp)
-                        : '—';
+                    const dt = log.timestamp ? new Date(log.timestamp) : null;
+                    const dateStr = dt ? dt.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : "Unknown Date";
+                    const timeStr = dt ? dt.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour12: true }) : "—";
+                    
+                    let dateHeader = "";
+                    if (dateStr !== lastDate) {
+                        lastDate = dateStr;
+                        dateHeader = `<tr class="date-group-header"><td colspan="6">${dateStr}</td></tr>`;
+                    }
 
                     const cam = camerasList.find(c => c.id === log.camera_id) || {};
                     let camIp = cam.source || '—';
@@ -643,13 +659,14 @@
                     const bbox = log.bbox_data || [];
                     const names = bbox.map(b => b.name).filter(n => n && n !== 'Unknown');
                     const personTags = names.length
-                        ? names.map(n => `<span class="person-tag">${n}</span>`).join('')
-                        : `<span style="color:var(--text-secondary)">${log.person_count || 0} persons</span>`;
+                         ? names.map(n => `<span class="person-tag">${n}</span>`).join('')
+                         : `<span style="color:var(--text-secondary)">${log.person_count || 0} persons</span>`;
 
                     const safe = encodeURIComponent(JSON.stringify(log));
                     return `
+                        ${dateHeader}
                         <tr>
-                            <td>${ts}</td>
+                            <td>${timeStr}</td>
                             <td>${log.camera_id}</td>
                             <td>${log.camera_id}</td>
                             <td>${camIp}</td>
