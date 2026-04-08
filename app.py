@@ -437,8 +437,14 @@ def recording_writer_thread(camera_id: str, stop_event: threading.Event,
 
     while not stop_event.is_set():
         try:
-            if process.poll() is not None:
-                print(f"[Recording:{camera_id}] FFmpeg exited (code {process.returncode})")
+            rc = process.poll()
+            if rc is not None:
+                # FFmpeg exited — read stderr to show why
+                try:
+                    err = process.stderr.read().decode(errors='replace')[-600:]
+                    print(f"[Recording:{camera_id}] FFmpeg exited (code {rc}): {err}")
+                except Exception:
+                    print(f"[Recording:{camera_id}] FFmpeg exited (code {rc})")
                 break
 
             with results_lock:
@@ -450,7 +456,12 @@ def recording_writer_thread(camera_id: str, stop_event: threading.Event,
                     process.stdin.write(frame.tobytes())
                     process.stdin.flush()
                 except (IOError, BrokenPipeError) as e:
-                    print(f"[Recording:{camera_id}] Pipe broken: {e}")
+                    err = ""
+                    try:
+                        err = process.stderr.read().decode(errors='replace')[-400:]
+                    except Exception:
+                        pass
+                    print(f"[Recording:{camera_id}] Pipe broken: {e} | FFmpeg: {err}")
                     break
 
             stop_event.wait(timeout=FRAME_INTERVAL)
@@ -1450,18 +1461,19 @@ async def toggle_recording(camera_id: str = Form(...)):
     try:
         p_ffmpeg = subprocess.Popen(
             ffmpeg_cmd, stdin=subprocess.PIPE,
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
         db_id = db_manager.start_recording(camera_id, local_path)
         stop_event = threading.Event()
-        thread = threading.Thread(
-            target=recording_writer_thread, args=(camera_id, stop_event, p_ffmpeg), daemon=True)
-        thread.start()
+        # Set camera_writers BEFORE starting thread — avoids race condition
         with writer_lock:
             camera_writers[camera_id] = {
                 "process": p_ffmpeg, "db_id": db_id,
                 "start_time": ist_now, "file_path": local_path,
                 "camera_id": camera_id, "w": w, "h": h
             }
+        thread = threading.Thread(
+            target=recording_writer_thread, args=(camera_id, stop_event, p_ffmpeg), daemon=True)
+        thread.start()
         recording_threads[camera_id] = thread
         recording_stop_events[camera_id] = stop_event
         print(f"[Recording:{camera_id}] Started → {local_path}")
@@ -1473,7 +1485,15 @@ async def toggle_recording(camera_id: str = Form(...)):
 @app.get("/api/recording_status")
 async def get_recording_status():
     with writer_lock:
-        return {"active_recordings": list(camera_writers.keys())}
+        active = {}
+        for cam_id, w in camera_writers.items():
+            proc = w.get("process")
+            active[cam_id] = {
+                "file": w.get("file_path"),
+                "ffmpeg_alive": proc.poll() is None if proc else False,
+                "start_time": w.get("start_time").isoformat() if w.get("start_time") else None,
+            }
+    return {"active_recordings": active}
 
 @app.get("/api/video_timeline/{record_id}")
 async def video_timeline(record_id: str):
@@ -1831,7 +1851,7 @@ async def set_camera_settings(camera_id: str, enabled: bool = Form(...)):
         try:
             p_ffmpeg = subprocess.Popen(
                 ffmpeg_cmd, stdin=subprocess.PIPE,
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
             db_id = db_manager.start_recording(camera_id, local_path)
             stop_event = threading.Event()
             # Set camera_writers BEFORE starting thread to avoid race condition

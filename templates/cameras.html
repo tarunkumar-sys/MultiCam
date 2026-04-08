@@ -265,9 +265,22 @@ async function toggleRec(id){
     const d=await r.json();
     const fd=new FormData();
     fd.append('enabled',!d.recording_enabled);
-    await fetch(`/api/camera_settings/${id}`,{method:'POST',body:fd});
-    await loadRecState(id);
-  }catch(e){}
+    const res=await fetch(`/api/camera_settings/${id}`,{method:'POST',body:fd});
+    const result=await res.json();
+    if(result.status==='error'){
+      alert('Recording error: '+result.message);
+    }
+    // Wait a moment then verify FFmpeg is actually alive
+    setTimeout(async()=>{
+      const sr=await fetch('/api/recording_status');
+      const sd=await sr.json();
+      const entry=sd.active_recordings[id];
+      if(entry && !entry.ffmpeg_alive){
+        alert(`[${id}] FFmpeg started but exited immediately. Check server console for FFmpeg error output.`);
+      }
+      await loadRecState(id);
+    }, 800);
+  }catch(e){alert('Error: '+e.message);}
   if(btn)btn.disabled=false;
 }
 
