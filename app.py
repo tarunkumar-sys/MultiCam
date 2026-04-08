@@ -1008,7 +1008,116 @@ def self_recognition_worker(frame, face_box, track_id, recognition_cache, frame_
         print(f"[Worker Error] {e}")
 
 
-# Active search mission logic removed. Detection is now always active.
+# ---------------------------------------------------------------------------
+# Search & Forensics Utilities
+# ---------------------------------------------------------------------------
+
+def scan_video_for_person(
+    video_path: str,
+    target_encoding: np.ndarray,
+    sample_interval: int = 10
+) -> list:
+    """
+    Scan a video file frame-by-frame looking for a target face.
+    """
+    results = []
+    if not os.path.exists(video_path):
+        return results
+
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        return results
+
+    fps = cap.get(cv2.CAP_PROP_FPS) or 20
+    frame_count = 0
+    current_segment = None
+    last_match_frame = -1
+    min_segment_gap = int(fps * 2)   # 2 seconds gap = new segment
+    DISTANCE_THRESHOLD = 0.65  # Using same threshold as recognizer for consistency
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        if frame_count % sample_interval == 0:
+            try:
+                # Use FaceRecognizer for consistent results
+                # recognizer.recognize needs a body_box.
+                # Here we just detect faces in the whole frame.
+                frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                
+                with recognizer.ai_lock:
+                    boxes, probs = recognizer.mtcnn.detect(frame_rgb)
+
+                match_found = False
+                best_sim = 0.0
+
+                if boxes is not None and len(boxes) > 0:
+                    for box in boxes:
+                        fx1, fy1, fx2, fy2 = [int(b) for b in box]
+                        fx1, fy1 = max(0, fx1), max(0, fy1)
+                        fx2 = min(frame.shape[1], fx2)
+                        fy2 = min(frame.shape[0], fy2)
+
+                        if (fx2 - fx1) < 30 or (fy2 - fy1) < 30:
+                            continue
+
+                        face_crop = frame_rgb[fy1:fy2, fx1:fx2]
+                        if face_crop.size == 0:
+                            continue
+
+                        # Generate embedding using recognizer's internal helper
+                        embedding = recognizer._embed(face_crop)
+                        if embedding is None:
+                            continue
+                            
+                        # Cosine similarity (recognizer uses matrix @ vector)
+                        sim = float(np.dot(target_encoding, embedding))
+                        
+                        if sim >= 0.65:
+                            match_found = True
+                            if sim > best_sim:
+                                best_sim = sim
+
+                if match_found:
+                    timestamp_sec = frame_count / fps
+                    minutes = int(timestamp_sec // 60)
+                    seconds = int(timestamp_sec % 60)
+                    ts_str = f"{minutes}:{seconds:02d}"
+
+                    # Start new segment or extend existing one
+                    if current_segment is None or (frame_count - last_match_frame) > min_segment_gap:
+                        if current_segment is not None:
+                            results.append(current_segment)
+                        current_segment = {
+                            "start_seconds": timestamp_sec,
+                            "start_timestamp": ts_str,
+                            "end_seconds": timestamp_sec,
+                            "end_timestamp": ts_str,
+                            "confidence": best_sim,
+                            "start_frame": frame_count,
+                            "end_frame": frame_count,
+                        }
+                    else:
+                        current_segment["end_seconds"] = timestamp_sec
+                        current_segment["end_timestamp"] = ts_str
+                        current_segment["end_frame"] = frame_count
+                        if best_sim > current_segment["confidence"]:
+                            current_segment["confidence"] = best_sim
+
+                    last_match_frame = frame_count
+
+            except Exception as e:
+                print(f"Scan error at frame {frame_count}: {e}")
+
+        frame_count += 1
+
+    if current_segment is not None:
+        results.append(current_segment)
+
+    cap.release()
+    return results
 
 
 # ---------------------------------------------------------------------------
@@ -1100,7 +1209,163 @@ async def get_server_time():
 async def search_page(request: Request):
     if not require_auth(request):
         return RedirectResponse(url="/login", status_code=302)
-    return templates.TemplateResponse(request, "search.html", {})
+    return templates.TemplateResponse(request, "search.html", {"nav": "search"})
+
+@app.get("/api/search")
+async def api_search(
+    name: Optional[str] = None,
+    start_time: Optional[str] = None,
+    end_time: Optional[str] = None
+):
+    """Search detection history by name and/or date range."""
+    results = db_manager.search_detections(name, start_time, end_time)
+    res = []
+    for r in results:
+        # r = (id, name, camera_id, timestamp, image_path, person_name)
+        res.append({
+            "id": r[0],
+            "person_name": r[1] or "Unknown",
+            "camera_id": r[2],
+            "timestamp": r[3].isoformat() if hasattr(r[3], 'isoformat') else str(r[3]),
+            "image_path": r[4],
+            "face_path": r[4]
+        })
+    return res
+
+@app.post("/api/search_by_image")
+async def search_by_image(file: UploadFile = File(...)):
+    """Upload a face — finds all detections of the matching registered person."""
+    img_bytes = await file.read()
+    nparr = np.frombuffer(img_bytes, np.uint8)
+    image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+    encoding = recognizer.get_encoding(image)
+    if encoding is None:
+        return []
+
+    best_person_name = None
+    best_sim = 0.65
+
+    # Match using recognizer's internal matrix for speed
+    if recognizer._enc_matrix is not None:
+        sims = recognizer._enc_matrix @ encoding
+        idx = int(np.argmax(sims))
+        if sims[idx] >= best_sim:
+            best_person_name = recognizer._enc_names[idx]
+
+    if not best_person_name:
+        return []
+
+    results = db_manager.search_detections(name=best_person_name)
+    return [
+        {
+            "id": r[0],
+            "person_name": r[1] or "Unknown",
+            "camera_id": r[2],
+            "timestamp": r[3].isoformat() if hasattr(r[3], 'isoformat') else str(r[3]),
+            "image_path": r[4],
+            "face_path": r[4]
+        }
+        for r in results
+    ]
+
+@app.post("/api/search_video_by_name")
+async def search_video_by_name(request: Request):
+    """Scan selected video recordings to find a registered person by name."""
+    data = await request.json()
+    name = data.get("name")
+    video_ids = data.get("video_ids", [])
+
+    if not name or not video_ids:
+        return {"status": "error", "message": "Name and video IDs required"}
+
+    # Look up registered person
+    persons = db_manager.get_registered_persons()
+    target = next((p for p in persons if p[1].lower() == name.lower()), None)
+    if target is None:
+        return {"status": "error", "message": f"Person '{name}' not found"}
+
+    target_encoding = np.frombuffer(target[3], dtype=np.float32)
+
+    all_results = []
+    for vid_id in video_ids:
+        rec = db_manager.get_recording(vid_id)
+        if rec and os.path.exists(rec[4]):
+            segments = scan_video_for_person(rec[4], target_encoding)
+            for segment in segments:
+                all_results.append({
+                    **segment,
+                    "video_id": vid_id,
+                    "video_name": os.path.basename(rec[4]),
+                    "video_path": rec[4],
+                    "camera_id": rec[1],
+                    "person_name": name,
+                })
+
+    return {
+        "status": "success",
+        "results": all_results,
+        "total_segments": len(all_results),
+        "videos_searched": len(video_ids),
+    }
+
+@app.post("/api/search_video_by_image")
+async def search_video_by_image(
+    file: UploadFile = File(...),
+    video_ids: str = Form(...) 
+):
+    """Scan selected video recordings to find a face from an uploaded image."""
+    video_ids_list = json.loads(video_ids)
+    img_bytes = await file.read()
+    nparr = np.frombuffer(img_bytes, np.uint8)
+    image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+    target_encoding = recognizer.get_encoding(image)
+    if target_encoding is None:
+        return {"status": "error", "message": "No face detected in photo"}
+
+    all_results = []
+    for vid_id in video_ids_list:
+        rec = db_manager.get_recording(vid_id)
+        if rec and os.path.exists(rec[4]):
+            segments = scan_video_for_person(rec[4], target_encoding)
+            for segment in segments:
+                all_results.append({
+                    **segment,
+                    "video_id": vid_id,
+                    "video_name": os.path.basename(rec[4]),
+                    "video_path": rec[4],
+                    "camera_id": rec[1],
+                    "person_name": "Target Face",
+                })
+
+    return {
+        "status": "success",
+        "results": all_results,
+        "total_segments": len(all_results),
+        "videos_searched": len(video_ids_list),
+    }
+
+@app.get("/api/recordings")
+async def api_recordings_list():
+    """List available video recordings."""
+    results = db_manager.get_recorded_videos()
+    return [
+        {
+            "id": r[0],
+            "camera_id": r[1],
+            "start_time": r[2].isoformat() if hasattr(r[2], 'isoformat') else str(r[2]),
+            "end_time": r[3].isoformat() if hasattr(r[3], 'isoformat') else str(r[3]),
+            "file_path": r[4],
+        }
+        for r in results
+    ]
+
+@app.post("/clear_history")
+async def clear_history_api():
+    """Wipe all detections from database."""
+    db_manager.delete_all_detections()
+    return {"status": "success"}
 
 @app.get("/recordings_page", response_class=HTMLResponse)
 async def recordings_page(request: Request):

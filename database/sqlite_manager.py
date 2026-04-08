@@ -279,27 +279,59 @@ class SqliteManager:
         except Exception: pass
 
     def search_detections(self, name=None, start_time=None, end_time=None):
+        """
+        Search detection history.
+        Returns list of tuples: (id, name, camera_id, timestamp, image_path, person_name)
+        """
         try:
-            query = "SELECT * FROM registered_detections WHERE 1=1"
+            # We search in registered_detections but we might want images from snapshots.
+            # However, registered_detections doesn't have a direct FK to snapshots.
+            # In AI Vigilance, we'll try to find the closest snapshot if possible,
+            # or just return the record as is.
+            query = """
+                SELECT rd.id, rd.person_name, rd.camera_id, rd.timestamp, p.image_path as person_image
+                FROM registered_detections rd
+                LEFT JOIN persons p ON rd.person_name = p.name
+                WHERE 1=1
+            """
             params = []
             if name:
-                query += " AND person_name = ?"
-                params.append(name)
+                query += " AND rd.person_name LIKE ?"
+                params.append(f"%{name}%")
             if start_time:
-                query += " AND timestamp >= ?"
+                query += " AND rd.timestamp >= ?"
                 params.append(start_time)
             if end_time:
-                query += " AND timestamp <= ?"
+                query += " AND rd.timestamp <= ?"
                 params.append(end_time)
             
-            query += " ORDER BY timestamp DESC"
+            query += " ORDER BY rd.timestamp DESC LIMIT 500"
             
             with self._get_connection() as conn:
                 rows = conn.execute(query, params).fetchall()
-                return [[r["id"], r["person_name"], r["camera_id"], 
-                         datetime.fromisoformat(r["timestamp"]) if isinstance(r["timestamp"], str) else r["timestamp"],
-                         None, r["person_name"]] for r in rows]
-        except Exception: return []
+                res = []
+                for r in rows:
+                    ts = r["timestamp"]
+                    if isinstance(ts, str):
+                        try:
+                            ts_dt = datetime.fromisoformat(ts)
+                        except:
+                            ts_dt = ts
+                    else:
+                        ts_dt = ts
+                        
+                    res.append([
+                        r["id"], 
+                        r["person_name"], 
+                        r["camera_id"], 
+                        ts_dt,
+                        r["person_image"], # Using the registered person photo as fallback
+                        r["person_name"]
+                    ])
+                return res
+        except Exception as e:
+            logger.error(f"Error in search_detections: {e}")
+            return []
 
     def get_registered_detections(self, name=None, limit=200):
         try:
