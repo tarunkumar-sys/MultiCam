@@ -59,7 +59,7 @@ snapshots/
 snapshots/*
 !snapshots/.gitkeep
 
-# Model files
+# Model files & weights
 *.pt
 *.pth
 *.onnx
@@ -68,8 +68,9 @@ snapshots/*
 *.pb
 *.pkl
 *.joblib
-yolov8n.pt
 yolov8*.pt
+yolov8*_openvino_model/
+openvino_model/
 
 # Node.js / Frontend
 node_modules/
@@ -82,7 +83,6 @@ yarn-error.log*
 .pnpm-debug.log*
 
 # OS
-.DS_Store
 Thumbs.db
 desktop.ini
 *.dll

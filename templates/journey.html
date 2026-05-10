@@ -1,669 +1,199 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Vigilance - Spatial Target Tracking</title>
-    <link rel="stylesheet" href="/static/skeleton.css">
-    <style>
-        :root {
-            --bg-primary: #f0f0f0;
-            --bg-secondary: #f4f5f7;
-            --bg-panel: #ffffff;
-            --text-primary: #333333;
-            --text-secondary: #666666;
-            --border-color: #dddddd;
-            --sidebar-bg: #2d2d2d;
-            --sidebar-active: #3a3a3a;
-            --accent: #c41e3a;
-            --accent-hover: #a01830;
-            --shadow: 0 2px 10px rgba(0,0,0,0.05);
-        }
+{% extends base_template %}
 
-        [data-theme="dark"] {
-            --bg-primary: #121212;
-            --bg-secondary: #1e1e1e;
-            --bg-panel: #252525;
-            --text-primary: #e0e0e0;
-            --text-secondary: #aaaaaa;
-            --border-color: #333333;
-            --sidebar-bg: #1a1a1a;
-            --sidebar-active: #2d2d2d;
-            --shadow: 0 4px 20px rgba(0,0,0,0.4);
-        }
-
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
-            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            background: var(--bg-primary); 
-            color: var(--text-primary);
-            height: 100vh;
-            overflow: hidden;
-            transition: background 0.3s, color 0.3s;
-        }
-        
-        /* Layout */
-        .app-container {
-            display: flex;
-            height: 100vh;
-        }
-
-        .main-view {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-    </style>
-
-    <!-- Inline script to prevent white flash -->
-    <script>
-        (function() {
-            const theme = localStorage.getItem('theme') || 'light';
-            document.documentElement.setAttribute('data-theme', theme);
-        })();
-    </script>
-    
-    <style>
-
-        /* Sidebar: Active Targets */
-        /* Sidebar: Standard + Target List */
-        /* Unified Sidebar Styles */
-        .sidebar {
-            width: 260px;
-            background: var(--sidebar-bg);
-            border-right: 1px solid var(--border-color);
-            display: flex;
-            flex-direction: column;
-            z-index: 100;
-            overflow-y: auto;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        .sidebar-header {
-            padding: 20px;
-            background: var(--accent);
-            color: #fff;
-            font-size: 18px;
-            font-weight: 800;
-            letter-spacing: 1px;
-            text-align: center;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .sidebar-info {
-            padding: 20px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            background: rgba(0,0,0,0.05);
-            border-bottom: 1px solid rgba(255,255,255,0.05);
-        }
-        .user-avatar {
-            width: 40px; height: 40px;
-            background: var(--accent);
-            border-radius: 10px;
-            display: flex; align-items: center; justify-content: center;
-            color: #fff; font-weight: bold; font-size: 18px;
-        }
-        .user-details { overflow: hidden; }
-        .user-name { font-size: 14px; font-weight: 600; color: #fff; white-space: nowrap; text-overflow: ellipsis; }
-        .user-role { font-size: 11px; color: #aaa; text-transform: uppercase; }
-
-        .sidebar-section { border-bottom: 1px solid rgba(255,255,255,0.05); }
-        .sidebar-title {
-            padding: 15px 20px 8px 20px;
-            color: #888;
-            font-size: 11px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            font-weight: 700;
-        }
-        .sidebar-menu { list-style: none; padding-bottom: 10px; }
-        .sidebar-menu li a {
-            display: flex;
-            align-items: center;
-            padding: 12px 20px;
-            color: #bbb;
-            text-decoration: none;
-            font-size: 13px;
-            transition: all 0.2s;
-            border-left: 4px solid transparent;
-        }
-        .sidebar-menu li a:hover {
-            background: rgba(255,255,255,0.05);
-            color: #fff;
-        }
-        .sidebar-menu li a.active {
-            background: rgba(196, 30, 58, 0.1);
-            color: #fff;
-            border-left-color: var(--accent);
-            font-weight: 600;
-        }
-        .sidebar-footer {
-            margin-top: auto;
-            padding: 20px;
-            background: rgba(0,0,0,0.1);
-            border-top: 1px solid rgba(255,255,255,0.05);
-        }
-        .theme-toggle-container {
-            display: flex; align-items: center; justify-content: space-between;
-            margin-bottom: 15px;
-        }
-        .theme-label { color: #888; font-size: 12px; font-weight: 600; }
-        .theme-switch { position: relative; display: inline-block; width: 40px; height: 20px; }
-        .theme-switch input { opacity: 0; width: 0; height: 0; }
-        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #444; transition: .4s; border-radius: 20px; }
-        .slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
-        input:checked + .slider { background-color: var(--accent); }
-        input:checked + .slider:before { transform: translateX(20px); }
-
-        .logout-btn-side {
-            width: 100%;
-            padding: 12px;
-            background: rgba(255,255,255,0.05);
-            border: 1px solid rgba(255,255,255,0.1);
-            color: #ef4444;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 13px;
-            font-weight: 600;
-            display: flex; align-items: center; justify-content: center; gap: 8px;
-            transition: all 0.2s;
-        }
-        .logout-btn-side:hover {
-            background: rgba(239, 68, 68, 0.1);
-            border-color: #ef4444;
-            color: #fff;
-        }
-
-        .target-list {
-            flex: 1;
-            overflow-y: auto;
-            padding: 10px;
-            background: rgba(0,0,0,0.05);
-        }
-
-        .target-card {
-            background: var(--bg-panel);
-            border-radius: 10px;
-            padding: 12px;
-            margin-bottom: 10px;
-            cursor: pointer;
-            border: 1px solid var(--border-color);
-            transition: all 0.3s ease;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .target-card:hover {
-            transform: translateX(5px);
-            background: var(--bg-secondary);
-        }
-
-        .target-card.active {
-            border-color: var(--accent);
-            background: var(--bg-secondary);
-            box-shadow: 0 0 15px rgba(196, 30, 58, 0.15);
-        }
-
-        .target-card-flex { display: flex; gap: 12px; align-items: center; }
-        .target-thumb {
-            width: 44px; height: 44px;
-            border-radius: 8px; object-fit: cover;
-            background: var(--bg-primary);
-            border: 2px solid var(--border-color);
-        }
-        .target-info { flex: 1; min-width: 0; }
-        .target-name { font-weight: 700; font-size: 13px; color: var(--text-primary); margin-bottom: 2px; }
-        .target-type {
-            font-size: 9px; text-transform: uppercase; letter-spacing: 1px;
-            padding: 2px 6px; border-radius: 4px;
-        }
-        .target-type.registered { background: #2196F3; color: white; }
-        .target-type.unknown { background: var(--accent); color: white; }
-
-        .target-meta {
-            margin-top: 8px; font-size: 10px;
-            color: var(--text-secondary); display: flex;
-            justify-content: space-between;
-        }
-
-        /* Sidebar Footer Toggle */
-        .sidebar-footer {
-            margin-top: auto;
-            padding: 15px;
-            border-top: 1px solid var(--border-color);
-            background: rgba(0,0,0,0.2);
-        }
-        .theme-toggle-container {
-            display: flex; align-items: center; justify-content: space-between;
-            margin-bottom: 12px; padding: 8px 0;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-        }
-        .theme-label { color: #ccc; font-size: 11px; text-transform: uppercase; }
-        .theme-switch { position: relative; display: inline-block; width: 34px; height: 18px; }
-        .theme-switch input { opacity: 0; width: 0; height: 0; }
-        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #444; transition: .4s; border-radius: 18px; }
-        .slider:before { position: absolute; content: ""; height: 12px; width: 12px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
-        input:checked + .slider { background-color: var(--accent); }
-        input:checked + .slider:before { transform: translateX(16px); }
-
-        .logout-btn-side {
-            width: 100%; background: var(--accent); border: none; color: #fff;
-            padding: 8px; cursor: pointer; font-size: 13px;
-        }
-        .logout-btn-side:hover { background: var(--accent-hover); }
-
-        /* Toast Notifications */
-        .toast-container { position: fixed; bottom: 24px; right: 24px; display: flex; flex-direction: column; gap: 12px; z-index: 10000; pointer-events: none; }
-        .toast {
-            width: 320px; background: var(--bg-panel); border-radius: 12px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.25); border: 1px solid var(--border-color);
-            padding: 16px; display: flex; gap: 12px; align-items: center;
-            transform: translateX(400px); transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            pointer-events: auto; position: relative; overflow: hidden;
-        }
-        .toast.active { transform: translateX(0); }
-        .toast-thumb { width: 50px; height: 50px; border-radius: 8px; object-fit: cover; border: 2px solid var(--accent); }
-        .toast-content { flex: 1; }
-        .toast-title { font-weight: 700; font-size: 14px; color: var(--text-primary); }
-        .toast-meta { font-size: 11px; color: var(--text-secondary); display: block; }
-        .toast-progress {
-            position: absolute; bottom: 0; left: 0;
-            height: 3px; background: var(--accent);
-            width: 100%;
-        }
-
-        /* Main View: Journey Timeline */
-        .main-view {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            background: var(--bg-secondary);
-            transition: background 0.3s;
-        }
-
-        .top-nav {
-            padding: 12px 20px;
-            background: var(--bg-panel);
-            border-bottom: 1px solid var(--border-color);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            transition: background 0.3s;
-        }
-
-        .btn-back {
-            color: var(--text-primary);
-            text-decoration: none;
-            font-size: 13px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            transition: color 0.2s;
-        }
-        .btn-back:hover { color: var(--accent); }
-        #targetHeader { color: var(--text-primary); }
-
-        .journey-content {
-            flex: 1;
-            overflow-y: auto;
-            padding: 40px;
-            position: relative;
-        }
-
-        /* Empty State */
-        .empty-journey {
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            text-align: center;
-            opacity: 0.5;
-        }
-        .empty-journey h1 { font-size: 48px; margin-bottom: 10px; }
-
-        /* Timeline Styling */
-        .timeline {
-            max-width: 900px;
-            margin: 0 auto;
-            position: relative;
-            padding-left: 60px;
-        }
-
-        .timeline::before {
-            content: '';
-            position: absolute;
-            left: 29px;
-            top: 0;
-            bottom: 0;
-            width: 2px;
-            background: linear-gradient(to bottom, transparent, var(--accent), transparent);
-        }
-
-        .timeline-item {
-            position: relative;
-            margin-bottom: 60px;
-            opacity: 0;
-            transform: translateY(20px);
-            animation: fadeIn 0.5s forwards ease-out;
-        }
-
-        @keyframes fadeIn {
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .timeline-dot {
-            position: absolute;
-            left: -38px;
-            top: 15px;
-            width: 16px;
-            height: 16px;
-            border-radius: 50%;
-            background: var(--accent);
-            border: 3px solid var(--bg-primary);
-            z-index: 2;
-            box-shadow: 0 0 10px var(--accent);
-        }
-
-        .timeline-card {
-            background: var(--bg-panel);
-            border-radius: 12px;
-            padding: 0;
-            box-shadow: var(--shadow);
-            border: 1px solid var(--border-color);
-            display: flex;
-            overflow: hidden;
-            min-height: 200px;
-            transition: background 0.3s, border-color 0.3s;
-        }
-
-        .timeline-img {
-            width: 400px;
-            height: auto;
-            object-fit: cover;
-            border-right: 1px solid var(--border-color);
-            background: #000;
-        }
-        #targetHeader { font-weight: 700; font-size: 15px; color: var(--text-primary); }
-
-        .timeline-details {
-            flex: 1;
-            padding: 25px;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .timeline-time {
-            font-size: 24px;
-            font-weight: 800;
-            color: var(--text-primary);
-            margin-bottom: 5px;
-        }
-
-        .timeline-loc {
-            font-size: 16px;
-            color: var(--accent);
-            font-weight: 600;
-            margin-bottom: 15px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .timeline-date {
-            font-size: 12px;
-            color: var(--text-secondary);
-            margin-top: auto;
-        }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #444; border-radius: 10px; }
-        ::-webkit-scrollbar-thumb:hover { background: #555; }
-
-    </style>
-</head>
-<body>
-    <div class="app-container">
-        <aside class="sidebar">
-            <div class="sidebar-header">AI VIGILANCE</div>
-            
-            <div class="sidebar-info">
-                <div class="user-avatar">A</div>
-                <div class="user-details">
-                    <div class="user-name">Administrator</div>
-                    <div class="user-role">System Operator</div>
-                </div>
-            </div>
-
-            <div class="sidebar-section">
-                <div class="sidebar-title">Monitoring</div>
-                <ul class="sidebar-menu">
-                    <li><a href="/" id="nav-live">Live Stream</a></li>
-                    <li><a href="/dashboard" id="nav-dashboard">Dashboard</a></li>
-                    <li><a href="/recordings_page" id="nav-recordings">Recordings</a></li>
-                    <li><a href="/detection_logs" id="nav-logs">Detection Logs</a></li>
-                </ul>
-            </div>
-            <div class="sidebar-section">
-                <div class="sidebar-title">Analytics</div>
-                <ul class="sidebar-menu">
-                    <li><a href="/people" id="nav-people">People Registry</a></li>
-                    <li><a href="/search" id="nav-search">Search & Filters</a></li>
-                    <li><a href="/journey" id="nav-journey">Journey Tracking</a></li>
-                    <li><a href="/analytics" id="nav-analytics">Analytics</a></li>
-                    <li><a href="/registered_detections" id="nav-reg-logs">Identity Logs</a></li>
-                </ul>
-            </div>
-            <div class="sidebar-section" style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
-                <div class="sidebar-title" style="display: flex; justify-content: space-between; align-items: center;">
-                    <span>Active Target List</span>
-                    <span style="font-size: 9px; opacity: 0.6;">LIVE FEED</span>
-                </div>
-                <div class="target-list" id="targetList">
-                    <!-- Skeleton target cards -->
-                    <div class="skeleton-block" style="gap:10px;padding:4px;">
-                        <div class="skeleton-feed-item" style="border-radius:10px;padding:12px;background:var(--bg-panel);border:1px solid var(--border-color);"><div class="bone bone-thumb"></div><div class="skeleton-block" style="flex:1;gap:6px;"><div class="bone bone-square" style="height:13px;width:70%;"></div><div class="bone bone-badge bone-rounded"></div></div></div>
-                        <div class="skeleton-feed-item" style="border-radius:10px;padding:12px;background:var(--bg-panel);border:1px solid var(--border-color);"><div class="bone bone-thumb"></div><div class="skeleton-block" style="flex:1;gap:6px;"><div class="bone bone-square" style="height:13px;width:55%;"></div><div class="bone bone-badge bone-rounded"></div></div></div>
-                        <div class="skeleton-feed-item" style="border-radius:10px;padding:12px;background:var(--bg-panel);border:1px solid var(--border-color);"><div class="bone bone-thumb"></div><div class="skeleton-block" style="flex:1;gap:6px;"><div class="bone bone-square" style="height:13px;width:80%;"></div><div class="bone bone-badge bone-rounded"></div></div></div>
-                    </div>
-                </div>
-            </div>
-            <div class="sidebar-section">
-                <div class="sidebar-title">Operations</div>
-                <ul class="sidebar-menu">
-                    <li><a href="/cameras" id="nav-cameras">Cameras</a></li>
-                    <li><a href="/add_camera" id="nav-add-camera">Add Camera</a></li>
-                </ul>
-            </div>
-            
-            <div class="sidebar-footer">
-                <div class="theme-toggle-container">
-                    <span class="theme-label">Dark Mode</span>
-                    <label class="theme-switch">
-                        <input type="checkbox" id="theme-checkbox" onchange="toggleTheme()">
-                        <span class="slider"></span>
-                    </label>
-                </div>
-                <button class="logout-btn-side" onclick="location.href='/logout'">
-                    🚪 Logout Session
-                </button>
-            </div>
-        </aside>
-
-    <div class="toast-container" id="toast-container"></div>
-
-    <main class="main-view">
-        <nav class="top-nav">
-            <a href="/" class="btn-back">← Back to Dashboard</a>
-            <div id="targetHeader" style="font-weight: bold; font-size: 16px;">Select a target to view journey</div>
-        </nav>
-
-        <div class="journey-content" id="journeyContent">
-            <div class="empty-journey">
-                <h1>👣</h1>
-                <p>No target selected</p>
-                <p style="font-size: 12px; margin-top: 10px;">Click a person in the sidebar to visualize their path through the facility.</p>
+{% block content %}
+<div class="journey-container" style="display: flex; height: 100%; overflow: hidden;">
+    <!-- Active Probe Sidebar -->
+    <div class="probe-sidebar" style="width: 340px; background: var(--bg-sidebar); border-right: 1px solid var(--border-color); display: flex; flex-direction: column;">
+        <div style="padding: 24px; border-bottom: 1px solid var(--border-color);">
+            <h3 style="font-size: 14px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: var(--accent);">Active Probes</h3>
+            <p style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">Dynamic entities currently tracked in-field.</p>
+        </div>
+        <div id="target-list-ajax" style="flex: 1; overflow-y: auto; padding: 16px;">
+            <div style="text-align: center; padding: 60px; color: var(--text-secondary); opacity: 0.5;">
+                <i class="fa-solid fa-satellite-dish fa-spin" style="font-size: 24px; margin-bottom: 16px;"></i>
+                <p>Scanning sectors...</p>
             </div>
         </div>
-    </main>
     </div>
 
-    <script src="/static/skeleton.js"></script>
-    <script>
-        // --- Theme Logic ---
-        function toggleTheme() {
-            const current = document.documentElement.getAttribute('data-theme');
-            const target = current === 'dark' ? 'light' : 'dark';
-            document.documentElement.setAttribute('data-theme', target);
-            localStorage.setItem('theme', target);
-        }
+    <!-- Journey Reconstruction Area -->
+    <div class="journey-viewer" style="flex: 1; overflow-y: auto; background: var(--bg-main); padding: 48px;">
+        <div id="journey-header" style="max-width: 900px; margin: 0 auto 60px auto;">
+            <h2 style="font-size: 32px; font-weight: 800; letter-spacing: -1px; margin-bottom: 12px;">Spatial Trajectory Path</h2>
+            <div style="display: flex; align-items: center; gap: 16px;">
+                <div style="height: 1px; flex: 1; background: var(--border-color);"></div>
+                <div style="font-size: 12px; font-weight: 800; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 2px;">Neural Reconstruction</div>
+                <div style="height: 1px; flex: 1; background: var(--border-color);"></div>
+            </div>
+        </div>
 
-        // --- Notification Listener (SSE) ---
-        function startNotificationListener() {
-            const evtSource = new EventSource("/api/notifications/stream");
-            evtSource.onmessage = function(event) {
-                const data = JSON.parse(event.data);
-                if (data.type === 'detection') showToast(data);
-            };
-            evtSource.onerror = function() {
-                evtSource.close();
-                setTimeout(startNotificationListener, 5000);
-            };
-        }
+        <div id="journey-body" style="max-width: 900px; margin: 0 auto;">
+            <div style="text-align: center; padding: 120px; color: var(--text-secondary); border: 2px dashed var(--border-color); border-radius: 24px; background: rgba(255,255,255,0.01);">
+                <i class="fa-solid fa-route" style="font-size: 64px; margin-bottom: 24px; opacity: 0.1;"></i>
+                <h3 style="color: var(--text-primary); font-weight: 700;">Trajectory Offline</h3>
+                <p>Select an active probe from the sidebar to reconstruct its movement history.</p>
+            </div>
+        </div>
+    </div>
+</div>
 
-        function showToast(data) {
-            const container = document.getElementById('toast-container');
-            const toast = document.createElement('div');
-            toast.className = 'toast';
-            toast.innerHTML = `
-                <img src="${data.thumbnail}" class="toast-thumb">
-                <div class="toast-content">
-                    <span class="toast-title">${data.target} Spotted</span>
-                    <span class="toast-meta">${data.camera} • ${data.time}</span>
-                </div>
-                <div class="toast-progress"></div>
-            `;
-            container.appendChild(toast);
-            setTimeout(() => toast.classList.add('active'), 100);
-            const progress = toast.querySelector('.toast-progress');
-            progress.animate([{ width: '100%' }, { width: '0%' }], { duration: 5000, fill: 'forwards' });
-            setTimeout(() => {
-                toast.classList.remove('active');
-                setTimeout(() => toast.remove(), 600);
-            }, 5000);
-        }
+<style>
+    .target-card-probe {
+        background: var(--bg-panel);
+        border: 1px solid var(--border-color);
+        padding: 16px;
+        border-radius: 12px;
+        margin-bottom: 12px;
+        cursor: pointer;
+        transition: var(--transition);
+        display: flex;
+        align-items: center;
+        gap: 16px;
+    }
 
-        document.addEventListener('DOMContentLoaded', () => {
-            const theme = localStorage.getItem('theme') || 'light';
-            document.getElementById('theme-checkbox').checked = (theme === 'dark');
-            startNotificationListener();
-            loadTargets();
-            setActiveNav();
-        });
+    .target-card-probe:hover { border-color: var(--accent); background: var(--bg-secondary); }
+    .target-card-probe.active { border-color: var(--accent); background: rgba(16, 163, 127, 0.1); box-shadow: 0 4px 15px rgba(16, 163, 127, 0.1); }
 
-        function setActiveNav() {
-            const currentPath = window.location.pathname;
-            const navMap = {
-                '/dashboard': 'nav-dashboard',
-                '/': 'nav-live',
-                '/recordings_page': 'nav-recordings',
-                '/detection_logs': 'nav-logs',
-                '/people': 'nav-people',
-                '/search': 'nav-search',
-                '/journey': 'nav-journey',
-                '/analytics': 'nav-analytics',
-                '/registered_detections': 'nav-reg-logs',
-                '/cameras': 'nav-cameras',
-                '/add_camera': 'nav-add-camera'
-            };
+    .probe-icon {
+        width: 44px;
+        height: 44px;
+        background: var(--bg-secondary);
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 800;
+        color: var(--accent);
+        border: 1px solid var(--border-color);
+    }
+
+    .trajectory-step {
+        position: relative;
+        padding-left: 60px;
+        margin-bottom: 48px;
+        animation: fadeIn 0.5s ease-out forwards;
+        opacity: 0;
+    }
+
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+    .step-marker {
+        position: absolute;
+        left: 0;
+        top: 10px;
+        width: 24px;
+        height: 24px;
+        background: var(--bg-main);
+        border: 4px solid var(--accent);
+        border-radius: 50%;
+        z-index: 2;
+        box-shadow: 0 0 15px var(--accent);
+    }
+
+    .step-line {
+        position: absolute;
+        left: 11px;
+        top: 34px;
+        bottom: -44px;
+        width: 2px;
+        background: var(--border-color);
+        z-index: 1;
+    }
+
+    .trajectory-step:last-child .step-line { display: none; }
+
+    .step-card {
+        background: var(--bg-panel);
+        border: 1px solid var(--border-color);
+        border-radius: 20px;
+        overflow: hidden;
+        display: flex;
+        box-shadow: var(--shadow);
+        transition: var(--transition);
+    }
+
+    .step-card:hover { border-color: var(--accent); }
+
+    .step-img {
+        width: 280px;
+        aspect-ratio: 16/9;
+        object-fit: cover;
+        border-right: 1px solid var(--border-color);
+    }
+
+    .step-content { padding: 24px; flex: 1; display: flex; flex-direction: column; }
+    .step-time { font-size: 20px; font-weight: 800; color: #fff; letter-spacing: -0.5px; }
+    .step-loc { color: var(--accent); font-weight: 700; margin-top: 4px; font-size: 14px; }
+</style>
+
+<script>
+    document.getElementById('page-title').textContent = 'Neural Trajectory Analysis';
+
+    async function loadActiveTargets() {
+        try {
+            const res = await fetch('/api/analytics/active_targets');
+            const data = await res.json();
+            const list = document.getElementById('target-list-ajax');
             
-            const activeId = navMap[currentPath];
-            if (activeId) {
-                document.getElementById(activeId)?.classList.add('active');
+            if(!data.length) {
+                list.innerHTML = '<div style="text-align:center; padding:60px; color:var(--text-secondary); opacity:0.5;">No active probes identified in the current sector.</div>';
+                return;
             }
-        }
+            
+            list.innerHTML = data.map(t => `
+                <div class="target-card-probe" onclick="reconstructJourney('${t.id}', this)">
+                    <div class="probe-icon">${t.id[0].toUpperCase()}</div>
+                    <div style="flex: 1;">
+                        <div style="font-weight: 700; font-size: 14px;">${t.id}</div>
+                        <div style="font-size: 11px; color: var(--text-secondary);">Last seen: ${new Date(t.last_seen).toLocaleTimeString()}</div>
+                    </div>
+                    <i class="fa-solid fa-chevron-right" style="font-size: 12px; opacity: 0.3;"></i>
+                </div>
+            `).join('');
+        } catch(e) {}
+    }
 
-        async function loadTargets() {
-            try {
-                const res = await fetch('/api/active_targets');
-                const targets = await res.json();
-                const list = document.getElementById('targetList');
-                if (targets.length === 0) {
-                    list.innerHTML = '<div style="text-align: center; padding: 40px; opacity: 0.5; font-size: 12px; color: var(--text-secondary);">No active targets.</div>';
-                    return;
-                }
-                list.innerHTML = targets.map(t => `
-                    <div class="target-card" onclick="selectTarget('${t.id}', '${t.type}')" id="card-${t.id}">
-                        <div class="target-card-flex">
-                            <img src="${t.type === 'unknown' ? '/api/target_thumbnail/'+t.id : '/static/img/user-bg.png'}" 
-                                 class="target-thumb" onerror="this.src='https://ui-avatars.com/api/?name=U'">
-                            <div class="target-info">
-                                <div class="target-name">${t.id}</div>
-                                <span class="target-type ${t.type}">${t.type}</span>
+    async function reconstructJourney(id, el) {
+        document.querySelectorAll('.target-card-probe').forEach(c => c.classList.remove('active'));
+        el.classList.add('active');
+
+        const body = document.getElementById('journey-body');
+        body.innerHTML = `
+            <div style="text-align:center; padding:120px; color:var(--text-secondary);">
+                <i class="fa-solid fa-circle-notch fa-spin" style="font-size:48px; margin-bottom:24px;"></i>
+                <p>Synthesizing spatial intelligence for <b>${id}</b>...</p>
+            </div>
+        `;
+        
+        try {
+            const res = await fetch(`/api/analytics/target_journey/${id}`);
+            const data = await res.json();
+            
+            if(!data.length) {
+                body.innerHTML = '<div style="text-align:center; padding:120px; opacity:0.5;">Incomplete trajectory data. Path reconstruction aborted.</div>';
+                return;
+            }
+            
+            body.innerHTML = data.map((step, i) => `
+                <div class="trajectory-step" style="animation-delay: ${i * 0.1}s">
+                    <div class="step-marker"></div>
+                    <div class="step-line"></div>
+                    <div class="step-card">
+                        <img src="/api/snapshot_image?path=${encodeURIComponent(step.snapshot_path)}" class="step-img" onerror="this.src='https://ui-avatars.com/api/?name=?&background=333&color=fff'">
+                        <div class="step-content">
+                            <div class="step-time">${new Date(step.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'})}</div>
+                            <div class="step-loc"><i class="fa-solid fa-location-dot"></i> ${step.camera_id}</div>
+                            <div style="margin-top: auto; font-size: 11px; color: var(--text-secondary); font-weight: 700; text-transform: uppercase;">
+                                SEC_EVENT_00${data.length - i}
                             </div>
-                        </div>
-                        <div class="target-meta">
-                            <span>🕒 ${t.last_seen}</span>
-                            <span>🎥 ${t.last_camera}</span>
                         </div>
                     </div>
-                `).join('');
-                const activeId = document.getElementById('targetHeader').textContent.split(': ')[1];
-                if (activeId) {
-                    const card = document.getElementById('card-' + activeId);
-                    if (card) card.classList.add('active');
-                }
-            } catch (err) {}
-        }
+                </div>
+            `).join('');
+        } catch(e) {}
+    }
 
-        async function selectTarget(id, type) {
-            document.querySelectorAll('.target-card').forEach(c => c.classList.remove('active'));
-            const card = document.getElementById('card-' + id);
-            if (card) card.classList.add('active');
-            document.getElementById('targetHeader').textContent = `Tracking History: ${id}`;
-
-            const content = document.getElementById('journeyContent');
-            content.innerHTML = '<div class="empty-journey"><h1>🔍</h1><p style="color: var(--text-secondary);">Reconstructing path...</p></div>';
-
-            try {
-                const res = await fetch(`/api/target_journey/${id}`);
-                const data = await res.json();
-                if (data.length === 0) {
-                    content.innerHTML = '<div class="empty-journey"><p style="color: var(--text-secondary);">No location history found.</p></div>';
-                    return;
-                }
-                let html = '<div class="timeline">';
-                data.forEach((p, index) => {
-                    html += `
-                        <div class="timeline-item" style="animation-delay: ${index * 0.1}s">
-                            <div class="timeline-dot"></div>
-                            <div class="timeline-card">
-                                <img src="/api/snapshot_image?path=${encodeURIComponent(p.snapshot_path)}" class="timeline-img" onerror="this.src='https://via.placeholder.com/400x225?text=No+Snapshot'">
-                                <div class="timeline-details">
-                                    <div class="timeline-time">${p.timestamp}</div>
-                                    <div class="timeline-loc">📍 ${p.camera_id}</div>
-                                    <div class="timeline-date">${p.date}</div>
-                                    <div style="margin-top: 15px;">
-                                        <span style="font-size: 11px; background: rgba(0,0,0,0.05); padding: 4px 8px; border-radius: 4px; color: var(--text-secondary);">
-                                            Evidence #${data.length - index}
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                });
-                html += '</div>';
-                content.innerHTML = html;
-            } catch (err) {
-                content.innerHTML = '<div class="empty-journey"><p style="color: var(--text-secondary);">Failed to load path.</p></div>';
-            }
-        }
-        setInterval(loadTargets, 15000);
-    </script>
-</body>
-</html>
+    loadActiveTargets();
+    window.ActiveIntervals.push(setInterval(loadActiveTargets, 15000));
+</script>
+{% endblock %}

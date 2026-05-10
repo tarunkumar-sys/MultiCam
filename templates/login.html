@@ -1,342 +1,361 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - AI Vigilance</title>
+    <title>Sign In - VigiLance</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <style>
+        :root {
+            --bg-main: #000000;
+            --bg-input: #1a1a1a;
+            --text-primary: #ffffff;
+            --text-secondary: #888888;
+            --border-color: #333333;
+            --accent: #10a37f;
+            --accent-hover: #1a7f64;
+            --error: #ef4444;
+        }
+
         * { margin: 0; padding: 0; box-sizing: border-box; }
+        
         body {
-            font-family: 'Microsoft YaHei', Arial, sans-serif;
-            background: #f0f0f0;
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-main);
+            color: var(--text-primary);
             min-height: 100vh;
             display: flex;
-        }
-        /* Left Side - Visual */
-        .login-visual {
-            flex: 1;
-            background: linear-gradient(180deg, #e8e8e8 0%, #d0d0d0 100%);
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            position: relative;
             overflow: hidden;
         }
-        /* City Skyline Background */
-        .city-skyline {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            height: 200px;
-            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 200" preserveAspectRatio="xMidYMax slice"><defs><linearGradient id="bldgGrad" x1="0%25" y1="0%25" x2="0%25" y2="100%25"><stop offset="0%25" style="stop-color:%23b0b0b0"/><stop offset="100%25" style="stop-color:%23808080"/></linearGradient></defs><g fill="url(%23bldgGrad)"><rect x="0" y="120" width="40" height="80"/><rect x="45" y="80" width="50" height="120"/><rect x="100" y="100" width="35" height="100"/><rect x="140" y="60" width="60" height="140"/><rect x="205" y="90" width="45" height="110"/><rect x="255" y="70" width="55" height="130"/><rect x="315" y="110" width="40" height="90"/><rect x="360" y="50" width="70" height="150"/><rect x="435" y="85" width="50" height="115"/><rect x="490" y="65" width="60" height="135"/><rect x="555" y="95" width="45" height="105"/><rect x="605" y="75" width="65" height="125"/><rect x="675" y="105" width="40" height="95"/><rect x="720" y="55" width="75" height="145"/><rect x="800" y="90" width="50" height="110"/><rect x="855" y="70" width="55" height="130"/><rect x="915" y="100" width="45" height="100"/><rect x="965" y="60" width="65" height="140"/><rect x="1035" y="85" width="50" height="115"/><rect x="1090" y="110" width="40" height="90"/><rect x="1135" y="75" width="65" height="125"/></g></svg>');
-            background-size: cover;
-            background-position: bottom;
-            background-repeat: no-repeat;
+
+        .login-wrapper {
+            display: flex;
+            width: 100%;
+            height: 100vh;
+        }
+
+        /* Left Side - Login Form */
+        .login-form-side {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            max-width: 600px;
+        }
+
+        .login-container {
+            width: 100%;
+            max-width: 420px;
+            position: relative;
             z-index: 1;
         }
-        /* Hikvision Logo Style */
-        .brand-logo {
-            position: absolute;
-            top: 40px;
-            left: 40px;
-            z-index: 10;
-        }
-        .brand-logo-text {
-            font-size: 28px;
-            font-weight: bold;
-            color: #c41e3a;
-            letter-spacing: 1px;
-        }
-        .brand-logo-text span {
-            color: #333;
-            font-weight: 300;
-        }
-        /* Camera Graphic Container */
-        .camera-container {
+
+        /* Right Side - Visual Panel */
+        .visual-panel {
+            flex: 1;
             position: relative;
-            z-index: 5;
+            overflow: hidden;
+            display: none;
+        }
+
+        /* Pixelated Background Pattern */
+        .pixel-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image: 
+                linear-gradient(90deg, #1a1a1a 1px, transparent 1px),
+                linear-gradient(#1a1a1a 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+
+        .pixel-bg::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(circle at 30% 40%, rgba(16, 163, 127, 0.15) 0%, transparent 50%),
+                radial-gradient(circle at 70% 60%, rgba(16, 163, 127, 0.1) 0%, transparent 40%);
+        }
+
+        .panel-content {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
             display: flex;
             flex-direction: column;
-            align-items: center;
-        }
-        /* Large Camera Lens */
-        .camera-lens-outer {
-            width: 320px;
-            height: 320px;
-            border-radius: 50%;
-            background: linear-gradient(145deg, #3a3a4a 0%, #2a2a3a 50%, #1a1a2a 100%);
-            display: flex;
-            align-items: center;
             justify-content: center;
-            box-shadow: 
-                0 20px 60px rgba(0,0,0,0.4),
-                inset 0 0 40px rgba(0,0,0,0.3);
-            position: relative;
-        }
-        .camera-lens-outer::before {
-            content: '';
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            right: 10px;
-            bottom: 10px;
-            border-radius: 50%;
-            background: linear-gradient(145deg, #4a4a5a 0%, #3a3a4a 50%, #2a2a3a 100%);
-        }
-        .camera-lens-inner {
-            width: 260px;
-            height: 260px;
-            border-radius: 50%;
-            background: linear-gradient(145deg, #1a1a2e 0%, #0d0d1a 100%);
-            position: relative;
-            display: flex;
             align-items: center;
-            justify-content: center;
-            box-shadow: inset 0 0 30px rgba(0,0,0,0.8);
+            padding: 60px;
         }
-        .camera-lens-glass {
-            width: 200px;
-            height: 200px;
-            border-radius: 50%;
-            background: radial-gradient(circle at 35% 35%, 
-                rgba(100, 150, 200, 0.4) 0%,
-                rgba(50, 80, 120, 0.6) 20%,
-                rgba(20, 40, 60, 0.8) 40%,
-                rgba(10, 20, 30, 0.95) 70%,
-                #050510 100%);
-            position: relative;
-            box-shadow: 
-                inset 0 0 40px rgba(0,0,0,0.9),
-                0 0 20px rgba(100, 150, 200, 0.2);
+
+        .panel-logo {
+            margin-bottom: 40px;
         }
-        .camera-lens-glass::before {
-            content: '';
-            position: absolute;
-            top: 15%;
-            left: 20%;
-            width: 30%;
-            height: 25%;
-            background: radial-gradient(ellipse, rgba(255,255,255,0.3) 0%, transparent 70%);
-            border-radius: 50%;
-            transform: rotate(-30deg);
-        }
-        .camera-lens-glass::after {
-            content: '';
-            position: absolute;
-            bottom: 20%;
-            right: 25%;
-            width: 15%;
-            height: 15%;
-            background: radial-gradient(circle, rgba(255,255,255,0.15) 0%, transparent 70%);
-            border-radius: 50%;
-        }
-        /* Lens Aperture */
-        .lens-aperture {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
+
+        .panel-logo svg {
             width: 80px;
             height: 80px;
-            border-radius: 50%;
-            background: radial-gradient(circle, 
-                rgba(196, 30, 58, 0.3) 0%,
-                rgba(100, 20, 40, 0.5) 40%,
-                transparent 70%);
+            color: var(--accent);
         }
-        /* Product Name */
-        .product-name {
-            margin-top: 40px;
+
+        .panel-title {
             font-size: 36px;
-            font-weight: bold;
-            color: #333;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 16px;
+            letter-spacing: -1px;
             text-align: center;
-            z-index: 10;
         }
-        .product-name span {
-            color: #c41e3a;
+
+        .panel-title span {
+            color: var(--accent);
         }
-        .product-tagline {
-            font-size: 14px;
-            color: #666;
-            margin-top: 8px;
+
+        .panel-subtitle {
+            font-size: 16px;
+            color: var(--text-secondary);
             text-align: center;
-            z-index: 10;
+            font-weight: 400;
         }
-        /* Right Side - Login Form */
-        .login-form-section {
-            width: 400px;
-            background: #fff;
+
+        .logo {
             display: flex;
-            flex-direction: column;
+            align-items: center;
             justify-content: center;
-            padding: 50px;
-            box-shadow: -10px 0 40px rgba(0,0,0,0.1);
+            gap: 12px;
+            margin-bottom: 48px;
         }
+
+        .logo svg {
+            width: 40px;
+            height: 40px;
+            color: var(--accent);
+        }
+
+        .logo-text {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--text-primary);
+            letter-spacing: -0.5px;
+        }
+
         .form-header {
-            margin-bottom: 40px;
             text-align: center;
+            margin-bottom: 32px;
         }
-        .form-header h2 {
-            font-size: 22px;
-            color: #333;
-            margin-bottom: 8px;
+
+        .form-header h1 {
+            font-size: 28px;
             font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+            letter-spacing: -0.5px;
         }
+
         .form-header p {
-            color: #888;
-            font-size: 13px;
+            color: var(--text-secondary);
+            font-size: 15px;
+            font-weight: 400;
         }
+
         .form-group {
             margin-bottom: 20px;
         }
+
         .form-group label {
             display: block;
             margin-bottom: 8px;
-            font-size: 13px;
-            color: #555;
+            font-size: 14px;
             font-weight: 500;
+            color: var(--text-primary);
         }
+
+        .input-wrapper {
+            position: relative;
+        }
+
         .form-group input {
             width: 100%;
-            padding: 12px 15px;
-            border: 1px solid #ddd;
-            font-size: 14px;
-            color: #333;
-            transition: all 0.2s;
-            background: #fafafa;
+            padding: 14px 16px;
+            padding-right: 48px;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 15px;
+            color: var(--text-primary);
+            font-family: 'Inter', sans-serif;
+            transition: border-color 0.2s, background 0.2s;
         }
+
         .form-group input:focus {
             outline: none;
-            border-color: #c41e3a;
-            background: #fff;
+            border-color: var(--accent);
+            background: #252525;
         }
+
         .form-group input::placeholder {
-            color: #aaa;
+            color: #555;
         }
+
+        .password-toggle {
+            position: absolute;
+            right: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 14px;
+            padding: 4px;
+            transition: color 0.2s;
+        }
+
+        .password-toggle:hover {
+            color: var(--text-primary);
+        }
+
         .login-btn {
             width: 100%;
             padding: 14px;
-            background: #c41e3a;
+            background: var(--accent);
             color: #fff;
             border: none;
+            border-radius: 8px;
             font-size: 15px;
             font-weight: 600;
             cursor: pointer;
-            transition: background 0.2s;
-            margin-top: 15px;
-            border-radius: 3px;
+            transition: background 0.2s, transform 0.1s;
+            margin-top: 8px;
+            font-family: 'Inter', sans-serif;
+            letter-spacing: 0.3px;
         }
+
         .login-btn:hover {
-            background: #a01830;
+            background: var(--accent-hover);
         }
-        .forgot-password {
-            text-align: center;
-            margin-top: 15px;
-            font-size: 12px;
+
+        .login-btn:active {
+            transform: scale(0.98);
         }
-        .forgot-password a {
-            color: #888;
-            text-decoration: none;
-        }
-        .forgot-password a:hover {
-            color: #c41e3a;
-        }
+
         .error-msg {
-            background: #fee;
-            color: #c33;
-            padding: 12px;
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--error);
+            padding: 12px 14px;
             font-size: 13px;
             margin-bottom: 20px;
             display: none;
-            border-left: 3px solid #c33;
+            border-radius: 8px;
+            border: 1px solid rgba(239, 68, 68, 0.3);
         }
+
         .error-msg.show {
             display: block;
         }
-        .form-footer {
-            margin-top: 30px;
+
+        .footer {
+            margin-top: 40px;
             text-align: center;
-            font-size: 11px;
-            color: #aaa;
+            font-size: 12px;
+            color: var(--text-secondary);
         }
-        /* Responsive */
-        @media (max-width: 900px) {
-            .login-visual {
-                display: none;
+
+        .clock-display {
+            position: fixed;
+            top: 24px;
+            right: 24px;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            letter-spacing: 0.5px;
+            z-index: 10;
+        }
+
+        @media (min-width: 1024px) {
+            .visual-panel {
+                display: block;
             }
-            .login-form-section {
-                width: 100%;
-                max-width: 400px;
-                margin: 0 auto;
-                box-shadow: none;
+            .login-form-side {
+                max-width: 50%;
             }
-            body {
-                background: #fff;
-                justify-content: center;
-                align-items: center;
+        }
+
+        @media (max-width: 768px) {
+            .login-form-side {
+                padding: 24px;
+            }
+            .login-container {
+                padding: 0;
             }
         }
     </style>
 </head>
 <body>
-    <!-- Left Side - Visual -->
-    <div class="login-visual">
-        <!-- Brand Logo -->
-        <div class="brand-logo">
-            <div class="brand-logo-text">AI<span>VIGILANCE</span></div>
+    <div class="clock-display" id="live-clock"></div>
+    
+    <div class="login-wrapper">
+        <!-- Left Side - Visual Panel -->
+        <div class="visual-panel">
+            <div class="pixel-bg"></div>
+            <div class="panel-content">
+                <div class="panel-logo">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <rect x="4" y="4" width="16" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="2"/>
+                        <circle cx="12" cy="12" r="4" fill="currentColor"/>
+                    </svg>
+                </div>
+                <div class="panel-title">AI <span>VIGILANCE</span></div>
+                <div class="panel-subtitle">Intelligent Surveillance System</div>
+            </div>
         </div>
-        
-        <!-- Camera Container -->
-        <div class="camera-container">
-            <div class="camera-lens-outer">
-                <div class="camera-lens-inner">
-                    <div class="camera-lens-glass">
-                        <div class="lens-aperture"></div>
+
+        <!-- Right Side - Login Form -->
+        <div class="login-form-side">
+            <div class="login-container">
+                
+                <div class="form-header">
+                    <h1>Sign In</h1>
+                    <p>Continue to access your dashboard</p>
+                </div>
+                
+                <div class="error-msg" id="errorMsg">Invalid username or password</div>
+                
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label for="username">Username</label>
+                        <input type="text" id="username" name="username" placeholder="Enter your username" required autofocus>
                     </div>
+                    <div class="form-group">
+                        <label for="password">Password</label>
+                        <div class="input-wrapper">
+                            <input type="password" id="password" name="password" placeholder="Enter your password" required>
+                            <i class="fa-solid fa-eye password-toggle" id="togglePassword"></i>
+                        </div>
+                    </div>
+                    <button type="submit" class="login-btn">Sign In</button>
+                </form>
+                
+                <div class="footer">
+                    VigiLance Surveillance System v1.0
                 </div>
             </div>
-        </div>
-        
-        <!-- Product Name -->
-        <div class="product-name">AI <span>VIGILANCE</span></div>
-        <div class="product-tagline">Intelligent Surveillance System</div>
-        
-        <!-- City Skyline -->
-        <div class="city-skyline"></div>
-    </div>
-
-    <!-- Right Side - Login Form -->
-    <div class="login-form-section">
-        <div class="form-header">
-            <h2>Welcome Back</h2>
-            <p>Please login to access the system</p>
-        </div>
-        <div class="error-msg" id="errorMsg">Invalid username or password</div>
-        <form id="loginForm">
-            <div class="form-group">
-                <label for="username">Username</label>
-                <input type="text" id="username" name="username" placeholder="Enter username" required autofocus>
-            </div>
-            <div class="form-group">
-                <label for="password">Password</label>
-                <input type="password" id="password" name="password" placeholder="Enter password" required>
-            </div>
-            <button type="submit" class="login-btn">Login</button>
-            <div class="forgot-password">
-                <a href="#">Forgot password?</a>
-            </div>
-        </form>
-        <div class="form-footer">
-            AI Vigilance Surveillance System v1.0
         </div>
     </div>
 
     <script>
-        // --- Server-Synced IST Clock ---
-        let _serverOffset = 0; // ms difference between server IST and browser local
+        let _serverOffset = 0;
         async function syncServerTime() {
             try {
                 const t0 = Date.now();
@@ -344,33 +363,37 @@
                 const t1 = Date.now();
                 if (res.ok) {
                     const data = await res.json();
-                    const serverMs = data.timestamp_ms;
-                    const rtt = t1 - t0;
-                    _serverOffset = serverMs - t0 + Math.round(rtt / 2);
+                    _serverOffset = data.timestamp_ms - t0 + Math.round((t1 - t0) / 2);
                 }
-            } catch(e) { /* silent — keep using last offset */ }
+            } catch(e) {}
         }
-        function getServerIST() {
-            const serverMs = Date.now() + _serverOffset;
-            return new Date(serverMs);
-        }
+
         function updateLiveClock() {
-            const now = getServerIST();
-            const timeString = now.toLocaleString('en-IN', {
-                timeZone: 'Asia/Kolkata',
-                year: 'numeric', month: 'short', day: '2-digit',
-                hour: '2-digit', minute: '2-digit', second: '2-digit',
-                hour12: true
-            });
+            const now = new Date(Date.now() + _serverOffset);
+            const timeString = now.toLocaleTimeString('en-US', {
+                hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
+            }).toUpperCase();
             const clockEl = document.getElementById('live-clock');
             if (clockEl) {
-                clockEl.textContent = '🕐 ' + timeString + ' IST';
+                clockEl.textContent = timeString + ' IST';
             }
         }
+
         syncServerTime().then(() => {
             updateLiveClock();
             setInterval(updateLiveClock, 1000);
-            setInterval(syncServerTime, 5 * 60 * 1000); // resync every 5 min
+            setInterval(syncServerTime, 5 * 60 * 1000);
+        });
+
+        // Password visibility toggle
+        const togglePassword = document.getElementById('togglePassword');
+        const passwordInput = document.getElementById('password');
+        
+        togglePassword.addEventListener('click', function() {
+            const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+            passwordInput.setAttribute('type', type);
+            this.classList.toggle('fa-eye');
+            this.classList.toggle('fa-eye-slash');
         });
 
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
@@ -391,7 +414,7 @@
                     document.getElementById('errorMsg').classList.add('show');
                 }
             } catch (err) {
-                document.getElementById('errorMsg').textContent = 'Login failed. Please try again.';
+                document.getElementById('errorMsg').textContent = 'Connection failed';
                 document.getElementById('errorMsg').classList.add('show');
             }
         });

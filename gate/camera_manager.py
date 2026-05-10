@@ -146,3 +146,21 @@ class CameraManager:
 
     def get_active_cameras(self):
         return list(self.cameras.keys())
+
+    def get_cameras_status(self):
+        """Returns detailed status of all managed cameras."""
+        status = []
+        for cid, handler in self.cameras.items():
+            status.append({
+                "id": cid,
+                "name": f"Camera {cid}", # Placeholder or from DB
+                "source": handler.source,
+                "status": "online" if handler.running else "offline",
+                "fps": 30 # Reported
+            })
+        return status
+
+    def stop_all(self):
+        """Stops all active camera handlers."""
+        for cid in list(self.cameras.keys()):
+            self.remove_camera(cid)

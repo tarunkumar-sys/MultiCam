@@ -1,641 +1,161 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Vigilance - Analytics</title>
-    <link rel="stylesheet" href="/static/skeleton.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        :root {
-            --bg-primary: #f0f0f0;
-            --bg-secondary: #f4f5f7;
-            --bg-panel: #ffffff;
-            --text-primary: #333333;
-            --text-secondary: #666666;
-            --border-color: #dddddd;
-            --sidebar-bg: #2d2d2d;
-            --sidebar-active: #3a3a3a;
-            --accent: #c41e3a;
-            --accent-hover: #a01830;
-            --shadow: 0 2px 10px rgba(0,0,0,0.05);
-            --chart-grid: #e0e0e0;
-        }
+{% extends base_template %}
 
-        [data-theme="dark"] {
-            --bg-primary: #121212;
-            --bg-secondary: #1e1e1e;
-            --bg-panel: #252525;
-            --text-primary: #e0e0e0;
-            --text-secondary: #aaaaaa;
-            --border-color: #333333;
-            --sidebar-bg: #1a1a1a;
-            --sidebar-active: #2d2d2d;
-            --shadow: 0 4px 20px rgba(0,0,0,0.4);
-            --chart-grid: #444444;
-        }
-
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
-            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            background: var(--bg-primary); 
-            color: var(--text-primary);
-            height: 100vh;
-            overflow: hidden;
-            display: flex;
-            transition: background 0.3s, color 0.3s;
-        }
-    </style>
-
-    <!-- Inline script to prevent white flash -->
-    <script>
-        (function() {
-            const theme = localStorage.getItem('theme') || 'light';
-            document.documentElement.setAttribute('data-theme', theme);
-        })();
-    </script>
-    
-    <style>
-        .app-container { display: flex; width: 100%; height: 100vh; }
-        
-        /* Unified Sidebar Styles */
-        .sidebar {
-            width: 260px;
-            background: var(--sidebar-bg);
-            border-right: 1px solid var(--border-color);
-            display: flex;
-            flex-direction: column;
-            z-index: 100;
-            overflow-y: auto;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        .sidebar-header {
-            padding: 20px;
-            background: var(--accent);
-            color: #fff;
-            font-size: 18px;
-            font-weight: 800;
-            letter-spacing: 1px;
-            text-align: center;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .sidebar-info {
-            padding: 20px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            background: rgba(0,0,0,0.05);
-            border-bottom: 1px solid rgba(255,255,255,0.05);
-        }
-        .user-avatar {
-            width: 40px; height: 40px;
-            background: var(--accent);
-            border-radius: 10px;
-            display: flex; align-items: center; justify-content: center;
-            color: #fff; font-weight: bold; font-size: 18px;
-        }
-        .user-details { overflow: hidden; }
-        .user-name { font-size: 14px; font-weight: 600; color: #fff; white-space: nowrap; text-overflow: ellipsis; }
-        .user-role { font-size: 11px; color: #aaa; text-transform: uppercase; }
-
-        .sidebar-section { border-bottom: 1px solid rgba(255,255,255,0.05); }
-        .sidebar-title {
-            padding: 15px 20px 8px 20px;
-            color: #888;
-            font-size: 11px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            font-weight: 700;
-        }
-        .sidebar-menu { list-style: none; padding-bottom: 10px; }
-        .sidebar-menu li a {
-            display: flex;
-            align-items: center;
-            padding: 12px 20px;
-            color: #bbb;
-            text-decoration: none;
-            font-size: 13px;
-            transition: all 0.2s;
-            border-left: 4px solid transparent;
-        }
-        .sidebar-menu li a:hover {
-            background: rgba(255,255,255,0.05);
-            color: #fff;
-        }
-        .sidebar-menu li a.active {
-            background: rgba(196, 30, 58, 0.1);
-            color: #fff;
-            border-left-color: var(--accent);
-            font-weight: 600;
-        }
-        .sidebar-footer {
-            margin-top: auto;
-            padding: 20px;
-            background: rgba(0,0,0,0.1);
-            border-top: 1px solid rgba(255,255,255,0.05);
-        }
-        .theme-toggle-container {
-            display: flex; align-items: center; justify-content: space-between;
-            margin-bottom: 15px;
-        }
-        .theme-label { color: #888; font-size: 12px; font-weight: 600; }
-        .theme-switch { position: relative; display: inline-block; width: 40px; height: 20px; }
-        .theme-switch input { opacity: 0; width: 0; height: 0; }
-        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #444; transition: .4s; border-radius: 20px; }
-        .slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
-        input:checked + .slider { background-color: var(--accent); }
-        input:checked + .slider:before { transform: translateX(20px); }
-
-        .logout-btn-side {
-            width: 100%;
-            padding: 12px;
-            background: rgba(255,255,255,0.05);
-            border: 1px solid rgba(255,255,255,0.1);
-            color: #ef4444;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 13px;
-            font-weight: 600;
-            display: flex; align-items: center; justify-content: center; gap: 8px;
-            transition: all 0.2s;
-        }
-        .logout-btn-side:hover {
-            background: rgba(239, 68, 68, 0.1);
-            border-color: #ef4444;
-            color: #fff;
-        }
-
-        /* Main Content */
-        .main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-        .toolbar {
-            padding: 20px 32px;
-            background: var(--bg-panel);
-            border-bottom: 1px solid var(--border-color);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            box-shadow: var(--shadow);
-            z-index: 10;
-        }
-        .toolbar-title { font-size: 1.25rem; font-weight: 700; color: var(--text-primary); }
-        .toolbar-actions { display: flex; gap: 12px; align-items: center; }
-        
-        .content { flex: 1; padding: 32px; overflow-y: auto; background: var(--bg-secondary); }
-
-        .btn {
-            padding: 10px 20px;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-            border: 1px solid var(--border-color);
-            background: var(--bg-panel);
-            color: var(--text-primary);
-            font-size: 0.85rem;
-        }
-        .btn:hover { background: var(--bg-secondary); }
-        .btn.active { background: var(--accent); color: white; border-color: var(--accent); }
-
-        .camera-filter {
-            padding: 10px 16px;
-            border-radius: 8px;
-            background: var(--bg-panel);
-            color: var(--text-primary);
-            border: 1px solid var(--border-color);
-            font-size: 0.85rem;
-            outline: none;
-        }
-
-        /* Stats Grid */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 24px;
-            margin-bottom: 32px;
-        }
-        .stat-card {
-            background: var(--bg-panel);
-            padding: 24px;
-            border-radius: 12px;
-            border: 1px solid var(--border-color);
-            box-shadow: var(--shadow);
-            transition: transform 0.2s;
-        }
-        .stat-card:hover { transform: translateY(-4px); }
-        .stat-label {
-            font-size: 0.7rem;
-            text-transform: uppercase;
-            font-weight: 700;
-            color: var(--text-secondary);
-            letter-spacing: 1px;
-            margin-bottom: 12px;
-        }
-        .stat-value {
-            font-size: 2rem;
-            font-weight: 800;
-            color: var(--text-primary);
-            line-height: 1;
-        }
-        .stat-change { margin-top: 8px; font-size: 0.8rem; font-weight: 600; }
-        .stat-change.up { color: #27ae60; }
-        .stat-change.down { color: var(--accent); }
-
-        /* Charts Grid */
-        .charts-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 24px;
-        }
-        .chart-card {
-            background: var(--bg-panel);
-            border-radius: 16px;
-            border: 1px solid var(--border-color);
-            padding: 24px;
-            box-shadow: var(--shadow);
-        }
-        .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
-        .chart-title { font-size: 1rem; font-weight: 700; color: var(--text-primary); }
-        .chart-container { position: relative; height: 350px; }
-
-        /* Toast Notifications */
-        .toast-container {
-            position: fixed;
-            bottom: 24px;
-            right: 24px;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            z-index: 10000;
-            pointer-events: none;
-        }
-        .toast {
-            width: 320px;
-            background: var(--bg-panel); border-radius: 12px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.25); border: 1px solid var(--border-color);
-            padding: 16px; display: flex; gap: 12px; align-items: center;
-            transform: translateX(400px); transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            pointer-events: auto; position: relative; overflow: hidden;
-        }
-        .toast.active { transform: translateX(0); }
-        .toast-thumb { width: 50px; height: 50px; border-radius: 8px; object-fit: cover; border: 2px solid var(--accent); }
-        .toast-content { flex: 1; }
-        .toast-title { font-weight: 700; font-size: 14px; color: var(--text-primary); }
-        .toast-meta { font-size: 11px; color: var(--text-secondary); display: block; }
-        .toast-progress {
-            position: absolute; bottom: 0; left: 0;
-            height: 3px; background: var(--accent);
-            width: 100%;
-        }
-    </style>
-</head>
-<body>
-    <div class="app-container">
-        <aside class="sidebar">
-            <div class="sidebar-header">AI VIGILANCE</div>
-            
-            <div class="sidebar-info">
-                <div class="user-avatar">A</div>
-                <div class="user-details">
-                    <div class="user-name">Administrator</div>
-                    <div class="user-role">System Operator</div>
-                </div>
-            </div>
-
-            <div class="sidebar-section">
-                <div class="sidebar-title">Monitoring</div>
-                <ul class="sidebar-menu">
-                    <li><a href="/" id="nav-live">Live Stream</a></li>
-                    <li><a href="/dashboard" id="nav-dashboard">Dashboard</a></li>
-                    <li><a href="/recordings_page" id="nav-recordings">Recordings</a></li>
-                    <li><a href="/detection_logs" id="nav-logs">Detection Logs</a></li>
-                </ul>
-            </div>
-            <div class="sidebar-section">
-                <div class="sidebar-title">Analytics</div>
-                <ul class="sidebar-menu">
-                    <li><a href="/people" id="nav-people">People Registry</a></li>
-                    <li><a href="/search" id="nav-search">Search & Filters</a></li>
-                    <li><a href="/journey" id="nav-journey">Journey Tracking</a></li>
-                    <li><a href="/analytics" id="nav-analytics">Analytics</a></li>
-                    <li><a href="/registered_detections" id="nav-reg-logs">Identity Logs</a></li>
-                </ul>
-            </div>
-            <div class="sidebar-section">
-                <div class="sidebar-title">Operations</div>
-                <ul class="sidebar-menu">
-                    <li><a href="/cameras" id="nav-cameras">Cameras</a></li>
-                    <li><a href="/add_camera" id="nav-add-camera">Add Camera</a></li>
-                </ul>
-            </div>
-            
-            <div class="sidebar-footer">
-                <div class="theme-toggle-container">
-                    <span class="theme-label">Dark Mode</span>
-                    <label class="theme-switch">
-                        <input type="checkbox" id="theme-checkbox" onchange="toggleTheme()">
-                        <span class="slider"></span>
-                    </label>
-                </div>
-                <button class="logout-btn-side" onclick="location.href='/logout'">
-                    🚪 Logout Session
-                </button>
-            </div>
-        </aside>
-
-        <div class="toast-container" id="toast-container"></div>
-
-        <div class="main-content">
-            <div class="toolbar">
-                <h1 class="toolbar-title">Operations Dashboard</h1>
-                <div class="toolbar-actions">
-                    <div id="live-clock" style="margin-right: 20px; font-weight: 700; color: var(--text-secondary); font-family: monospace;"></div>
-                    <select id="camera-filter" class="camera-filter" onchange="loadAnalytics()">
-                        <option value="">All Camera Feeds</option>
-                    </select>
-                    <div style="display: flex; gap: 8px; background: var(--bg-secondary); padding: 4px; border-radius: 10px;">
-                        <button class="btn active" onclick="setTimeRange('24h')">Last 24h</button>
-                        <button class="btn" onclick="setTimeRange('7d')">7 Day Report</button>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="content">
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-label" id="lbl-total-detections">Total Detections</div>
-                        <div class="stat-value" id="total-detections"><div class="bone bone-rounded" style="height:38px;width:70%;display:inline-block;"></div></div>
-                        <div class="stat-change" id="detection-change"><div class="bone bone-square" style="height:12px;width:55%;display:inline-block;"></div></div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-label">Peak Hour</div>
-                        <div class="stat-value" id="peak-hour"><div class="bone bone-rounded" style="height:38px;width:60%;display:inline-block;"></div></div>
-                        <div class="stat-change" id="peak-count"><div class="bone bone-square" style="height:12px;width:65%;display:inline-block;"></div></div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-label">Avg Per Hour</div>
-                        <div class="stat-value" id="avg-hour"><div class="bone bone-rounded" style="height:38px;width:50%;display:inline-block;"></div></div>
-                        <div class="stat-change"><div class="bone bone-square" style="height:12px;width:40%;display:inline-block;"></div></div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-label">Active Cameras</div>
-                        <div class="stat-value" id="active-cameras"><div class="bone bone-rounded" style="height:38px;width:45%;display:inline-block;"></div></div>
-                        <div class="stat-change"><div class="bone bone-square" style="height:12px;width:50%;display:inline-block;"></div></div>
-                    </div>
-                </div>
-
-                <div class="charts-grid">
-                    <div class="chart-card">
-                        <div class="chart-header">
-                            <span class="chart-title">Hourly Traffic Pattern</span>
-                        </div>
-                        <div class="chart-container" id="hourly-chart-wrap">
-                            <!-- Skeleton while chart loads -->
-                            <div id="hourly-skeleton" class="bone bone-chart" style="position:absolute;inset:0;height:100%;border-radius:8px;"></div>
-                            <canvas id="hourlyChart" style="opacity:0;transition:opacity 0.4s;"></canvas>
-                        </div>
-                    </div>
-                    <div class="chart-card">
-                        <div class="chart-header">
-                            <span class="chart-title">Daily Trend (Last 7 Days)</span>
-                        </div>
-                        <div class="chart-container" id="daily-chart-wrap">
-                            <!-- Skeleton while chart loads -->
-                            <div id="daily-skeleton" class="bone bone-chart" style="position:absolute;inset:0;height:100%;border-radius:8px;"></div>
-                            <canvas id="dailyChart" style="opacity:0;transition:opacity 0.4s;"></canvas>
-                        </div>
-                    </div>
-                </div>
-            </div>
+{% block content %}
+<div class="analytics-wrapper" style="padding: 32px; height: 100%; overflow-y: auto;">
+    <div class="header-section" style="margin-bottom: 40px; display: flex; justify-content: space-between; align-items: flex-end;">
+        <div>
+            <h2 style="font-size: 32px; font-weight: 800; letter-spacing: -1px;">Trend Analytics</h2>
+            <p style="color: var(--text-secondary); font-size: 15px;">Historical traffic patterns and behavioral intelligence.</p>
+        </div>
+        <div class="filter-box" style="background: var(--bg-panel); padding: 8px 16px; border-radius: 12px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 12px;">
+            <i class="fa-solid fa-filter" style="color: var(--accent); font-size: 13px;"></i>
+            <select id="camera-filter" onchange="loadAnalytics()" style="background: transparent; border: none; color: #fff; font-weight: 700; font-size: 13px; outline: none; cursor: pointer;">
+                <option value="">Global Network</option>
+            </select>
         </div>
     </div>
 
-    <script src="/static/skeleton.js"></script>
-    <script>
-        // --- Theme Engine ---
-        function toggleTheme() {
-            const current = document.documentElement.getAttribute('data-theme');
-            const target = current === 'dark' ? 'light' : 'dark';
-            document.documentElement.setAttribute('data-theme', target);
-            localStorage.setItem('theme', target);
-            updateChartColors();
-        }
+    <!-- Analytics Key Metrics -->
+    <div class="metrics-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px; margin-bottom: 40px;">
+        <div class="card" style="padding: 24px;">
+            <div style="font-size: 11px; font-weight: 800; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 8px;">Peak Engagement</div>
+            <div style="font-size: 28px; font-weight: 800;" id="peak-val">--</div>
+            <div style="font-size: 12px; color: var(--accent); font-weight: 700; margin-top: 8px;" id="peak-time">SYNCING...</div>
+        </div>
+        <div class="card" style="padding: 24px;">
+            <div style="font-size: 11px; font-weight: 800; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 8px;">Average Saturation</div>
+            <div style="font-size: 28px; font-weight: 800;" id="avg-val">--</div>
+            <div style="font-size: 12px; color: var(--text-secondary); font-weight: 700; margin-top: 8px;">PERSONS / HOUR</div>
+        </div>
+        <div class="card" style="padding: 24px;">
+            <div style="font-size: 11px; font-weight: 800; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 8px;">Weekly Volume</div>
+            <div style="font-size: 28px; font-weight: 800;" id="weekly-val">--</div>
+            <div style="font-size: 12px; color: var(--accent); font-weight: 700; margin-top: 8px;">TOTAL DETECTIONS</div>
+        </div>
+    </div>
 
-        // --- Notification Engine ---
-        function startNotificationListener() {
-            const evtSource = new EventSource("/api/notifications/stream");
-            evtSource.onmessage = function(event) {
-                const data = JSON.parse(event.data);
-                if (data.type === 'detection') showToast(data);
-            };
-            evtSource.onerror = function() {
-                evtSource.close();
-                setTimeout(startNotificationListener, 5000);
-            };
-        }
+    <!-- Charts Section -->
+    <div class="charts-container" style="display: grid; grid-template-columns: 1fr 1fr; gap: 32px; margin-bottom: 32px;">
+        <div class="card" style="padding: 32px;">
+            <h4 style="margin-bottom: 24px; font-size: 16px; font-weight: 700;">Hourly Traffic Pattern</h4>
+            <div style="height: 320px; position: relative;">
+                <canvas id="hourlyChart"></canvas>
+            </div>
+        </div>
+        <div class="card" style="padding: 32px;">
+            <h4 style="margin-bottom: 24px; font-size: 16px; font-weight: 700;">7-Day Growth Trend</h4>
+            <div style="height: 320px; position: relative;">
+                <canvas id="dailyChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
 
-        function showToast(data) {
-            const container = document.getElementById('toast-container');
-            const toast = document.createElement('div');
-            toast.className = 'toast';
-            toast.innerHTML = `
-                <img src="${data.thumbnail}" class="toast-thumb">
-                <div class="toast-content">
-                    <span class="toast-title">${data.target} Spotted</span>
-                    <span class="toast-meta">${data.camera} • ${data.time}</span>
-                </div>
-                <div class="toast-progress"></div>
-            `;
-            container.appendChild(toast);
-            setTimeout(() => toast.classList.add('active'), 100);
-            const progress = toast.querySelector('.toast-progress');
-            progress.animate([{ width: '100%' }, { width: '0%' }], { duration: 5000, fill: 'forwards' });
-            setTimeout(() => {
-                toast.classList.remove('active');
-                setTimeout(() => toast.remove(), 600);
-            }, 5000);
-        }
+<script>
+    document.getElementById('page-title').textContent = 'Intelligence & Trend Analytics';
 
-        // --- Server-Synced IST Clock ---
-        let _serverOffset = 0;
-        async function syncServerTime() {
-            try {
-                const t0 = Date.now();
-                const res = await fetch('/api/server_time');
-                const t1 = Date.now();
-                if (res.ok) {
-                    const data = await res.json();
-                    _serverOffset = data.timestamp_ms - t0 + Math.round((t1 - t0) / 2);
+    let hourlyChart = null;
+    let dailyChart = null;
+
+    async function loadAnalytics() {
+        const camId = document.getElementById('camera-filter').value;
+        try {
+            const hRes = await fetch(`/api/analytics/hourly?camera_id=${camId}`);
+            const hData = await hRes.json();
+            const dRes = await fetch(`/api/analytics/daily?camera_id=${camId}&days=7`);
+            const dData = await dRes.json();
+            
+            updateMetrics(hData, dData);
+            renderCharts(hData, dData);
+        } catch (e) { console.error('Analytics load error', e); }
+    }
+
+    function updateMetrics(hData, dData) {
+        if(!hData.length) return;
+        const peak = hData.reduce((max, d) => d.count > max.count ? d : max, hData[0]);
+        document.getElementById('peak-val').textContent = peak.count;
+        document.getElementById('peak-time').textContent = `AT ${peak.label.toUpperCase()}`;
+        
+        const avg = (hData.reduce((s,d) => s + d.count, 0) / (hData.length || 1)).toFixed(1);
+        document.getElementById('avg-val').textContent = avg;
+        
+        const weekly = dData.reduce((s,d) => s + d.count, 0);
+        document.getElementById('weekly-val').textContent = weekly;
+    }
+
+    function renderCharts(hData, dData) {
+        const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+        const border = getComputedStyle(document.documentElement).getPropertyValue('--border-color').trim();
+        const text = getComputedStyle(document.documentElement).getPropertyValue('--text-secondary').trim();
+
+        Chart.defaults.color = text;
+        Chart.defaults.font.family = "'Inter', sans-serif";
+
+        if(hourlyChart) hourlyChart.destroy();
+        hourlyChart = new Chart(document.getElementById('hourlyChart'), {
+            type: 'bar',
+            data: {
+                labels: hData.map(d => d.label),
+                datasets: [{
+                    label: 'Detection Volume',
+                    data: hData.map(d => d.count),
+                    backgroundColor: accent,
+                    borderRadius: 6,
+                    hoverBackgroundColor: '#fff'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { grid: { display: false }, border: { display: false } },
+                    y: { grid: { color: border }, border: { display: false }, beginAtZero: true }
                 }
-            } catch(e) {}
-        }
-        function getServerIST() { return new Date(Date.now() + _serverOffset); }
-        function updateLiveClock() {
-            const timeString = getServerIST().toLocaleString('en-IN', {
-                timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
-            });
-            document.getElementById('live-clock').textContent = 'SYNC: ' + timeString + ' IST';
-        }
-
-        let hourlyChart = null;
-        let dailyChart = null;
-        let currentRange = '24h';
-
-        async function loadCameras() {
-            try {
-                const res = await fetch('/api/cameras');
-                const cameras = await res.json();
-                const select = document.getElementById('camera-filter');
-                cameras.forEach(cam => {
-                    const opt = document.createElement('option');
-                    opt.value = cam.id; opt.textContent = cam.id;
-                    select.appendChild(opt);
-                });
-            } catch (err) {}
-        }
-
-        function setTimeRange(range) {
-            currentRange = range;
-            document.querySelectorAll('.toolbar-actions .btn').forEach(btn => btn.classList.remove('active'));
-            event.target.classList.add('active');
-            loadAnalytics();
-        }
-
-        async function loadAnalytics() {
-            const cameraId = document.getElementById('camera-filter').value;
-            try {
-                const hourlyRes = await fetch(`/api/analytics/hourly?camera_id=${cameraId}`);
-                const hourlyData = await hourlyRes.json();
-                const dailyRes = await fetch(`/api/analytics/daily?camera_id=${cameraId}&days=7`);
-                const dailyData = await dailyRes.json();
-                updateStats(hourlyData, dailyData);
-                renderCharts(hourlyData, dailyData);
-                // Reveal charts, hide skeletons
-                Boneyard.hide('hourly-skeleton');
-                Boneyard.hide('daily-skeleton');
-                const hCanvas = document.getElementById('hourlyChart');
-                const dCanvas = document.getElementById('dailyChart');
-                if (hCanvas) hCanvas.style.opacity = '1';
-                if (dCanvas) dCanvas.style.opacity = '1';
-            } catch (err) {}
-        }
-
-        function updateStats(hourlyData, dailyData) {
-            const maxPeak = Math.max(...hourlyData.map(d => d.count), 0);
-            document.getElementById('total-detections').textContent = maxPeak;
-            document.querySelector('#total-detections').previousElementSibling.textContent = 'Peak Hits Today';
-            const peak = hourlyData.reduce((max, d) => d.count > max.count ? d : max, hourlyData[0] || {label: '-', count: 0});
-            document.getElementById('peak-hour').textContent = peak.label;
-            document.getElementById('peak-count').textContent = `+${peak.count} Event Peak`;
-            const avg = hourlyData.length > 0 ? (hourlyData.reduce((s, d) => s + d.count, 0) / hourlyData.length).toFixed(1) : 0;
-            document.getElementById('avg-hour').textContent = avg;
-            const activeCams = new Set(hourlyData.filter(d => d.camera_id).map(d => d.camera_id)).size;
-            document.getElementById('active-cameras').textContent = activeCams || '0';
-        }
-
-        function getChartColors() {
-            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-            return {
-                grid: isDark ? '#333333' : '#e0e0e0',
-                text: isDark ? '#aaaaaa' : '#666666'
-            };
-        }
-
-        function renderCharts(hourlyData, dailyData) {
-            const colors = getChartColors();
-            Chart.defaults.color = colors.text;
-            Chart.defaults.borderColor = colors.grid;
-
-            // Hourly Bar Chart
-            if (hourlyChart) hourlyChart.destroy();
-            const hCtx = document.getElementById('hourlyChart').getContext('2d');
-            hourlyChart = new Chart(hCtx, {
-                type: 'bar',
-                data: {
-                    labels: hourlyData.map(d => d.label),
-                    datasets: [{
-                        label: 'Internal Flow',
-                        data: hourlyData.map(d => d.count),
-                        backgroundColor: '#c41e3a',
-                        borderRadius: 6
-                    }]
-                },
-                options: {
-                    responsive: true, maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        y: { grid: { color: colors.grid }, ticks: { color: colors.text } },
-                        x: { grid: { display: false }, ticks: { color: colors.text } }
-                    }
-                }
-            });
-
-            // Daily Line Chart
-            if (dailyChart) dailyChart.destroy();
-            const dCtx = document.getElementById('dailyChart').getContext('2d');
-            dailyChart = new Chart(dCtx, {
-                type: 'line',
-                data: {
-                    labels: dailyData.map(d => d.date),
-                    datasets: [{
-                        label: 'Weekly Intelligence',
-                        data: dailyData.map(d => d.count),
-                        borderColor: '#c41e3a',
-                        backgroundColor: 'rgba(196, 30, 58, 0.1)',
-                        borderWidth: 4, fill: true, tension: 0.4, pointRadius: 5
-                    }]
-                },
-                options: {
-                    responsive: true, maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        y: { grid: { color: colors.grid }, ticks: { color: colors.text } },
-                        x: { grid: { display: false }, ticks: { color: colors.text } }
-                    }
-                }
-            });
-        }
-
-        function updateChartColors() {
-            if (hourlyChart || dailyChart) { loadAnalytics(); }
-        }
-
-        document.addEventListener('DOMContentLoaded', () => {
-            const theme = localStorage.getItem('theme') || 'light';
-            document.getElementById('theme-checkbox').checked = (theme === 'dark');
-            syncServerTime().then(() => {
-                updateLiveClock();
-                setInterval(updateLiveClock, 1000);
-            });
-            startNotificationListener();
-            loadCameras();
-            loadAnalytics();
-            setActiveNav();
+            }
         });
 
-        function setActiveNav() {
-            const currentPath = window.location.pathname;
-            const navMap = {
-                '/dashboard': 'nav-dashboard',
-                '/': 'nav-live',
-                '/recordings_page': 'nav-recordings',
-                '/detection_logs': 'nav-logs',
-                '/people': 'nav-people',
-                '/search': 'nav-search',
-                '/journey': 'nav-journey',
-                '/analytics': 'nav-analytics',
-                '/registered_detections': 'nav-reg-logs',
-                '/cameras': 'nav-cameras',
-                '/add_camera': 'nav-add-camera'
-            };
-            
-            const activeId = navMap[currentPath];
-            if (activeId) {
-                document.getElementById(activeId)?.classList.add('active');
+        if(dailyChart) dailyChart.destroy();
+        dailyChart = new Chart(document.getElementById('dailyChart'), {
+            type: 'line',
+            data: {
+                labels: dData.map(d => d.date),
+                datasets: [{
+                    label: 'Volume',
+                    data: dData.map(d => d.count),
+                    borderColor: accent,
+                    backgroundColor: 'rgba(16, 163, 127, 0.1)',
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 4,
+                    pointBackgroundColor: accent,
+                    borderWidth: 3
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { grid: { display: false }, border: { display: false } },
+                    y: { grid: { color: border }, border: { display: false }, beginAtZero: true }
+                }
             }
-        }
+        });
+    }
 
-        setInterval(loadAnalytics, 300000);
-    </script>
-</body>
-</html>
+    async function populateCameras() {
+        const res = await fetch('/api/cameras');
+        const cams = await res.json();
+        const sel = document.getElementById('camera-filter');
+        cams.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.id; opt.textContent = c.id;
+            sel.appendChild(opt);
+        });
+    }
 
+    populateCameras();
+    loadAnalytics();
+</script>
+{% endblock %}

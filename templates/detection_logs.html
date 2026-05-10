@@ -1,791 +1,190 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Vigilance - Detection Logs</title>
-    <link rel="stylesheet" href="/static/skeleton.css">
-    <style>
-        :root {
-            --bg-primary: #f0f0f0;
-            --bg-secondary: #f4f5f7;
-            --bg-panel: #ffffff;
-            --text-primary: #333333;
-            --text-secondary: #666666;
-            --border-color: #dddddd;
-            --sidebar-bg: #2d2d2d;
-            --sidebar-active: #3a3a3a;
-            --accent: #c41e3a;
-            --accent-hover: #a01830;
-            --shadow: 0 2px 10px rgba(0,0,0,0.05);
-            --table-header: #c41e3a;
-            --modal-bg: rgba(0,0,0,0.9);
-        }
+{% extends base_template %}
 
-        [data-theme="dark"] {
-            --bg-primary: #121212;
-            --bg-secondary: #1e1e1e;
-            --bg-panel: #252525;
-            --text-primary: #e0e0e0;
-            --text-secondary: #aaaaaa;
-            --border-color: #333333;
-            --sidebar-bg: #1a1a1a;
-            --sidebar-active: #2d2d2d;
-            --shadow: 0 4px 20px rgba(0,0,0,0.4);
-            --table-header: #801226;
-            --modal-bg: rgba(0,0,0,0.95);
-        }
+{% block content %}
+<div class="logs-wrapper" style="padding: 32px; height: 100%; overflow-y: auto;">
+    <div class="header-section" style="margin-bottom: 32px; display: flex; justify-content: space-between; align-items: flex-end;">
+        <div>
+            <h2 style="font-size: 28px; font-weight: 800; letter-spacing: -0.5px;">System Audit Logs</h2>
+            <p style="color: var(--text-secondary); font-size: 14px;">Cryptographically hashed event sequence for forensic auditing.</p>
+        </div>
+        <div class="filter-panel" style="display: flex; gap: 16px; align-items: center; background: var(--bg-panel); padding: 8px 16px; border-radius: 12px; border: 1px solid var(--border-color);">
+            <div class="f-group">
+                <label style="font-size: 10px; font-weight: 800; color: var(--text-secondary); text-transform: uppercase;">Sensor</label>
+                <select id="camera-filter-logs" onchange="loadDetectionLogs(1)" style="background: transparent; border: none; color: #fff; font-weight: 700; outline: none; cursor: pointer;">
+                    <option value="">ALL SECTORS</option>
+                </select>
+            </div>
+            <div style="width: 1px; height: 24px; background: var(--border-color);"></div>
+            <div class="f-group">
+                <label style="font-size: 10px; font-weight: 800; color: var(--text-secondary); text-transform: uppercase;">Density</label>
+                <select id="pageSizeSelect" onchange="loadDetectionLogs(1)" style="background: transparent; border: none; color: #fff; font-weight: 700; outline: none; cursor: pointer;">
+                    <option value="20">20/PAGE</option>
+                    <option value="50">50/PAGE</option>
+                </select>
+            </div>
+        </div>
+    </div>
 
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
-            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            background: var(--bg-primary); 
-            color: var(--text-primary);
-            height: 100vh;
-            overflow: hidden;
-            display: flex;
-            transition: background 0.3s, color 0.3s;
-        }
-    </style>
+    <!-- Audit Table -->
+    <div class="card" style="overflow: hidden;">
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="background: rgba(255,255,255,0.02); text-align: left;">
+                    <th style="padding: 16px 24px; font-size: 11px; font-weight: 800; color: var(--text-secondary); text-transform: uppercase;">Event Timestamp</th>
+                    <th style="padding: 16px 24px; font-size: 11px; font-weight: 800; color: var(--text-secondary); text-transform: uppercase;">Source ID</th>
+                    <th style="padding: 16px 24px; font-size: 11px; font-weight: 800; color: var(--text-secondary); text-transform: uppercase;">Entity Density</th>
+                    <th style="padding: 16px 24px; font-size: 11px; font-weight: 800; color: var(--text-secondary); text-transform: uppercase; text-align: right;">Evidence</th>
+                </tr>
+            </thead>
+            <tbody id="logsBody-ajax">
+                <tr><td colspan="4" style="text-align: center; padding: 100px; color: var(--text-secondary); opacity: 0.5;">Loading temporal audit chain...</td></tr>
+            </tbody>
+        </table>
+    </div>
 
-    <!-- Inline script to prevent white flash -->
-    <script>
-        (function() {
-            const theme = localStorage.getItem('theme') || 'light';
-            document.documentElement.setAttribute('data-theme', theme);
-        })();
-    </script>
+    <!-- Pagination -->
+    <div id="paginationBar-ajax" style="display: none; margin-top: 24px; justify-content: space-between; align-items: center;">
+        <div id="pageInfo-ajax" style="font-size: 13px; color: var(--text-secondary); font-weight: 600;"></div>
+        <div id="pageControls-ajax" style="display: flex; gap: 8px;"></div>
+    </div>
+</div>
+
+<!-- Modal: Evidence Inspection -->
+<div id="imageModalLogs" class="modal-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 9999; align-items: center; justify-content: center; backdrop-filter: blur(20px);">
+    <div class="inspection-container" style="width: 90vw; height: 85vh; display: flex; background: var(--bg-panel); border-radius: 24px; overflow: hidden; border: 1px solid var(--border-color); box-shadow: 0 0 100px rgba(0,0,0,0.8);">
+        <div class="inspection-main" style="flex: 1; position: relative; background: #000; display: flex; align-items: center; justify-content: center;">
+            <img id="modalImageLogs" src="" style="max-width: 100%; max-height: 100%; object-fit: contain;">
+            <button onclick="closeLogModal()" style="position: absolute; top: 24px; right: 24px; background: rgba(0,0,0,0.5); border: none; color: #fff; width: 44px; height: 44px; border-radius: 50%; cursor: pointer; font-size: 20px;"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="inspection-sidebar" style="width: 320px; background: var(--bg-sidebar); border-left: 1px solid var(--border-color); display: flex; flex-direction: column;">
+            <div style="padding: 24px; border-bottom: 1px solid var(--border-color);">
+                <h4 style="font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;">Neural Crops</h4>
+                <p style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">Extracted biometric features from this event.</p>
+            </div>
+            <div id="modalCrops" style="flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px;"></div>
+        </div>
+    </div>
+</div>
+
+<style>
+    td { padding: 16px 24px; border-bottom: 1px solid var(--border-color); font-size: 14px; }
     
-    <style>
-        .app-container { display: flex; width: 100%; height: 100vh; }
+    .op-btn { 
+        padding: 6px 16px; 
+        border-radius: 8px; 
+        border: 1px solid var(--border-color); 
+        background: transparent; 
+        color: var(--text-primary); 
+        cursor: pointer; 
+        font-size: 12px; 
+        font-weight: 700;
+        transition: var(--transition);
+    }
+    .op-btn:hover { border-color: var(--accent); background: rgba(16, 163, 127, 0.1); }
+
+    .crop-item {
+        width: 100%;
+        border-radius: 12px;
+        border: 2px solid var(--border-color);
+        transition: var(--transition);
+    }
+    .crop-item:hover { border-color: var(--accent); transform: scale(1.02); }
+
+    .pag-btn { padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-panel); color: #fff; font-weight: 700; cursor: pointer; }
+    .pag-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+</style>
+
+<script>
+    document.getElementById('page-title').textContent = 'System Temporal Audit';
+
+    let currentLogPage = 1;
+
+    async function loadDetectionLogs(page = 1) {
+        currentLogPage = page;
+        const cam = document.getElementById('camera-filter-logs').value;
+        const size = document.getElementById('pageSizeSelect').value;
+        const skip = (page - 1) * size;
         
-        /* Unified Sidebar Styles */
-        .sidebar {
-            width: 260px;
-            background: var(--sidebar-bg);
-            border-right: 1px solid var(--border-color);
-            display: flex;
-            flex-direction: column;
-            z-index: 100;
-            overflow-y: auto;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        .sidebar-header {
-            padding: 20px;
-            background: var(--accent);
-            color: #fff;
-            font-size: 18px;
-            font-weight: 800;
-            letter-spacing: 1px;
-            text-align: center;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .sidebar-info {
-            padding: 20px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            background: rgba(0,0,0,0.05);
-            border-bottom: 1px solid rgba(255,255,255,0.05);
-        }
-        .user-avatar {
-            width: 40px; height: 40px;
-            background: var(--accent);
-            border-radius: 10px;
-            display: flex; align-items: center; justify-content: center;
-            color: #fff; font-weight: bold; font-size: 18px;
-        }
-        .user-details { overflow: hidden; }
-        .user-name { font-size: 14px; font-weight: 600; color: #fff; white-space: nowrap; text-overflow: ellipsis; }
-        .user-role { font-size: 11px; color: #aaa; text-transform: uppercase; }
+        const body = document.getElementById('logsBody-ajax');
+        body.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 100px;"><i class="fa-solid fa-microchip fa-spin"></i></td></tr>';
 
-        .sidebar-section { border-bottom: 1px solid rgba(255,255,255,0.05); }
-        .sidebar-title {
-            padding: 15px 20px 8px 20px;
-            color: #888;
-            font-size: 11px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            font-weight: 700;
-        }
-        .sidebar-menu { list-style: none; padding-bottom: 10px; }
-        .sidebar-menu li a {
-            display: flex;
-            align-items: center;
-            padding: 12px 20px;
-            color: #bbb;
-            text-decoration: none;
-            font-size: 13px;
-            transition: all 0.2s;
-            border-left: 4px solid transparent;
-        }
-        .sidebar-menu li a:hover {
-            background: rgba(255,255,255,0.05);
-            color: #fff;
-        }
-        .sidebar-menu li a.active {
-            background: rgba(196, 30, 58, 0.1);
-            color: #fff;
-            border-left-color: var(--accent);
-            font-weight: 600;
-        }
-        .sidebar-footer {
-            margin-top: auto;
-            padding: 20px;
-            background: rgba(0,0,0,0.1);
-            border-top: 1px solid rgba(255,255,255,0.05);
-        }
-        .theme-toggle-container {
-            display: flex; align-items: center; justify-content: space-between;
-            margin-bottom: 15px;
-        }
-        .theme-label { color: #888; font-size: 12px; font-weight: 600; }
-        .theme-switch { position: relative; display: inline-block; width: 40px; height: 20px; }
-        .theme-switch input { opacity: 0; width: 0; height: 0; }
-        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #444; transition: .4s; border-radius: 20px; }
-        .slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
-        input:checked + .slider { background-color: var(--accent); }
-        input:checked + .slider:before { transform: translateX(20px); }
-
-        .logout-btn-side {
-            width: 100%;
-            padding: 12px;
-            background: rgba(255,255,255,0.05);
-            border: 1px solid rgba(255,255,255,0.1);
-            color: #ef4444;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 13px;
-            font-weight: 600;
-            display: flex; align-items: center; justify-content: center; gap: 8px;
-            transition: all 0.2s;
-        }
-        .logout-btn-side:hover {
-            background: rgba(239, 68, 68, 0.1);
-            border-color: #ef4444;
-            color: #fff;
-        }
-
-        /* Main Content */
-        .main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-        .toolbar {
-            padding: 20px 32px;
-            background: var(--bg-panel);
-            border-bottom: 1px solid var(--border-color);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            box-shadow: var(--shadow);
-            z-index: 10;
-        }
-        .toolbar-title { font-size: 1.25rem; font-weight: 700; color: var(--text-primary); }
-        
-        .content { flex: 1; padding: 32px; overflow-y: auto; background: var(--bg-secondary); }
-
-        /* Filter Bar */
-        .filter-bar {
-            background: var(--bg-panel);
-            padding: 20px 24px;
-            border-radius: 12px;
-            border: 1px solid var(--border-color);
-            margin-bottom: 24px;
-            display: flex;
-            gap: 20px;
-            align-items: flex-end;
-            box-shadow: var(--shadow);
-        }
-        .filter-group { display: flex; flex-direction: column; gap: 8px; }
-        .filter-group label { font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
-        .filter-group select {
-            padding: 10px 16px;
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            color: var(--text-primary);
-            font-size: 0.9rem;
-            outline: none;
-            min-width: 200px;
-        }
-
-        .btn-refresh {
-            padding: 10px 24px;
-            background: var(--accent);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-        .btn-refresh:hover { background: var(--accent-hover); }
-
-        /* Pagination */
-        .pagination {
-            display: flex; align-items: center; justify-content: space-between;
-            margin-top: 20px; padding: 14px 20px;
-            background: var(--bg-panel); border-radius: 10px;
-            border: 1px solid var(--border-color);
-        }
-        .pagination-info { font-size: 13px; color: var(--text-secondary); }
-        .pagination-controls { display: flex; gap: 6px; align-items: center; }
-        .page-btn {
-            min-width: 36px; height: 36px; padding: 0 10px;
-            border: 1px solid var(--border-color);
-            background: var(--bg-panel); color: var(--text-primary);
-            border-radius: 6px; cursor: pointer; font-size: 13px;
-            font-weight: 600; transition: all 0.15s;
-            display: flex; align-items: center; justify-content: center;
-        }
-        .page-btn:hover:not(:disabled) { background: var(--accent); color: #fff; border-color: var(--accent); }
-        .page-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
-        .page-btn:disabled { opacity: 0.35; cursor: not-allowed; }
-        .page-size-select {
-            padding: 6px 10px; border: 1px solid var(--border-color);
-            background: var(--bg-panel); color: var(--text-primary);
-            border-radius: 6px; font-size: 13px; outline: none;
-        }
-
-        /* Logs Table */
-        .logs-table {
-            width: 100%;
-            background: var(--bg-panel);
-            border-radius: 12px;
-            overflow: hidden;
-            border-collapse: separate;
-            border-spacing: 0;
-            box-shadow: var(--shadow);
-            border: 1px solid var(--border-color);
-        }
-        .logs-table th {
-            background: var(--table-header);
-            color: white;
-            padding: 16px 20px;
-            text-align: left;
-            font-weight: 600;
-            font-size: 0.85rem;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-        .logs-table td {
-            padding: 16px 20px;
-            border-bottom: 1px solid var(--border-color);
-            color: var(--text-primary);
-            font-size: 0.9rem;
-        }
-        .logs-table tr:last-child td { border-bottom: none; }
-        .logs-table tr:hover { background: var(--bg-secondary); }
-
-        .view-btn {
-            width: 36px; height: 36px;
-            background: var(--accent);
-            color: white;
-            border: none;
-            border-radius: 50%;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: transform 0.2s, background 0.2s;
-        }
-        .view-btn:hover { background: var(--accent-hover); transform: scale(1.1); }
-        .view-btn::before { content: "👁"; font-size: 18px; }
-
-        .person-tag {
-            display: inline-block;
-            background: rgba(196, 30, 58, 0.1);
-            color: var(--accent);
-            padding: 4px 10px;
-            border-radius: 6px;
-            font-size: 0.75rem;
-            font-weight: 700;
-            margin-right: 6px;
-            border: 1px solid rgba(196, 30, 58, 0.2);
-        }
-
-        /* Modal Architecture */
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: var(--modal-bg);
-            z-index: 1000;
-            justify-content: center;
-            align-items: center;
-            backdrop-filter: blur(8px);
-        }
-        .modal.active { display: flex; }
-        .modal-main {
-            display: flex;
-            background: #000;
-            max-width: 90vw;
-            max-height: 85vh;
-            border-radius: 16px;
-            overflow: hidden;
-            border: 1px solid #444;
-            position: relative;
-            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
-        }
-        .modal-image-container { flex: 1; background: #000; display: flex; align-items: center; justify-content: center; }
-        .modal-image { max-width: 100%; max-height: 100%; object-fit: contain; }
-        
-        .crop-container {
-            width: 280px;
-            background: #1a1a1a;
-            padding: 24px;
-            border-left: 1px solid #333;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-        }
-        .crop-title { color: #888; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #333; padding-bottom: 12px; }
-        .crop-item { width: 100%; border-radius: 8px; overflow: hidden; border: 2px solid #333; }
-        .crop-item img { width: 100%; display: block; }
-        
-        .modal-close {
-            position: absolute; top: 16px; right: 16px;
-            width: 40px; height: 40px;
-            background: rgba(0,0,0,0.5);
-            color: white; border: none; border-radius: 50%;
-            font-size: 24px; cursor: pointer; z-index: 10;
-        }
-        .modal-close:hover { background: var(--accent); }
-
-        .modal-info-bar {
-            position: absolute; bottom: 0; left: 0; width: 100%;
-            background: rgba(0,0,0,0.7);
-            padding: 12px 24px; color: white; font-size: 0.85rem;
-            backdrop-filter: blur(4px);
-            display: flex; justify-content: space-between; align-items: center;
-        }
-
-        /* Toast Notifications */
-        .toast-container {
-            position: fixed; bottom: 24px; right: 24px;
-            display: flex; flex-direction: column; gap: 12px; z-index: 10000;
-            pointer-events: none;
-        }
-        .toast {
-            width: 320px; background: var(--bg-panel); border-radius: 12px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.25); border: 1px solid var(--border-color);
-            padding: 16px; display: flex; gap: 12px; align-items: center;
-            transform: translateX(400px); transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            pointer-events: auto; position: relative; overflow: hidden;
-        }
-        .toast.active { transform: translateX(0); }
-        .toast-thumb { width: 50px; height: 50px; border-radius: 8px; object-fit: cover; border: 2px solid var(--accent); }
-        .toast-content { flex: 1; }
-        .toast-title { font-weight: 700; font-size: 14px; color: var(--text-primary); }
-        .toast-meta { font-size: 11px; color: var(--text-secondary); display: block; }
-        .toast-progress { position: absolute; bottom: 0; left: 0; height: 3px; background: var(--accent); width: 100%; }
-        
-        .date-group-header {
-            background: var(--bg-secondary) !important;
-            font-weight: 800 !important;
-            color: var(--accent) !important;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            font-size: 11px;
-            padding: 10px 20px !important;
-            border-left: 4px solid var(--accent);
-        }
-    </style>
-</head>
-<body>
-    <div class="app-container">
-        <aside class="sidebar">
-            <div class="sidebar-header">AI VIGILANCE</div>
+        try {
+            const res = await fetch(`/api/search/snapshots?limit=${size}&skip=${skip}${cam ? '&camera_id='+cam : ''}`);
+            const data = await res.json();
+            const items = data.items || [];
+            const total = data.total || 0;
             
-            <div class="sidebar-info">
-                <div class="user-avatar">A</div>
-                <div class="user-details">
-                    <div class="user-name">Administrator</div>
-                    <div class="user-role">System Operator</div>
-                </div>
-            </div>
+            renderLogRows(items);
+            renderLogPagination(total, size);
+        } catch(e) { console.error('Log fetch failed', e); }
+    }
 
-            <div class="sidebar-section">
-                <div class="sidebar-title">Monitoring</div>
-                <ul class="sidebar-menu">
-                    <li><a href="/" id="nav-live">Live Stream</a></li>
-                    <li><a href="/dashboard" id="nav-dashboard">Dashboard</a></li>
-                    <li><a href="/recordings_page" id="nav-recordings">Recordings</a></li>
-                    <li><a href="/detection_logs" id="nav-logs">Detection Logs</a></li>
-                </ul>
-            </div>
-            <div class="sidebar-section">
-                <div class="sidebar-title">Analytics</div>
-                <ul class="sidebar-menu">
-                    <li><a href="/people" id="nav-people">People Registry</a></li>
-                    <li><a href="/search" id="nav-search">Search Forensic</a></li>
-                    <li><a href="/journey" id="nav-journey">Journey Tracking</a></li>
-                    <li><a href="/analytics" id="nav-analytics">Analytics</a></li>
-                    <li><a href="/registered_detections" id="nav-reg-logs">Identity Logs</a></li>
-                </ul>
-            </div>
-            <div class="sidebar-section">
-                <div class="sidebar-title">Operations</div>
-                <ul class="sidebar-menu">
-                    <li><a href="/cameras" id="nav-cameras">Cameras</a></li>
-                    <li><a href="/add_camera" id="nav-add-camera">Add Camera</a></li>
-                </ul>
-            </div>
-            
-            <div class="sidebar-footer">
-                <div class="theme-toggle-container">
-                    <span class="theme-label">Dark Mode</span>
-                    <label class="theme-switch">
-                        <input type="checkbox" id="theme-checkbox" onchange="toggleTheme()">
-                        <span class="slider"></span>
-                    </label>
-                </div>
-                <button class="logout-btn-side" onclick="location.href='/logout'">
-                    🚪 Logout Session
-                </button>
-            </div>
-        </aside>
-
-        <div class="toast-container" id="toast-container"></div>
-
-        <div class="main-content">
-            <div class="toolbar">
-                <h1 class="toolbar-title">Historical Detection Logs</h1>
-                <div id="live-clock" style="font-weight: 700; color: var(--text-secondary); font-family: monospace;"></div>
-            </div>
-            
-            <div class="content">
-                <div class="filter-bar">
-                    <div class="filter-group">
-                        <label>Sensor Array Source</label>
-                        <select id="camera-filter">
-                            <option value="">Full System Audit</option>
-                        </select>
-                    </div>
-                    <div class="filter-group">
-                        <label>Per Page</label>
-                        <select class="page-size-select" id="pageSizeSelect" onchange="changePageSize()">
-                            <option value="20">20</option>
-                            <option value="50">50</option>
-                            <option value="100">100</option>
-                        </select>
-                    </div>
-                    <button class="btn-refresh" onclick="goToPage(1)">REFRESH</button>
-                </div>
-
-                <table class="logs-table" id="logsTable">
-                    <thead>
-                        <tr>
-                            <th>Time</th>
-                            <th>Camera Name</th>
-                            <th>Camera ID</th>
-                            <th>Camera IP</th>
-                            <th>Detected Persons</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody id="logsBody">
-                        <!-- Skeleton rows -->
-                        <tr><td style="padding:14px 20px;"><div class="bone bone-square" style="height:13px;width:55%;"></div></td><td style="padding:14px 20px;"><div class="bone bone-square" style="height:13px;width:65%;"></div></td><td style="padding:14px 20px;"><div class="bone bone-square" style="height:13px;width:50%;"></div></td><td style="padding:14px 20px;"><div class="bone bone-square" style="height:13px;width:60%;"></div></td><td style="padding:14px 20px;"><div class="bone bone-badge bone-rounded"></div></td><td style="padding:14px 20px;"><div class="bone bone-btn bone-rounded"></div></td></tr>
-                        <tr><td style="padding:14px 20px;"><div class="bone bone-square" style="height:13px;width:70%;"></div></td><td style="padding:14px 20px;"><div class="bone bone-square" style="height:13px;width:55%;"></div></td><td style="padding:14px 20px;"><div class="bone bone-square" style="height:13px;width:60%;"></div></td><td style="padding:14px 20px;"><div class="bone bone-square" style="height:13px;width:45%;"></div></td><td style="padding:14px 20px;"><div class="bone bone-badge bone-rounded"></div></td><td style="padding:14px 20px;"><div class="bone bone-btn bone-rounded"></div></td></tr>
-                        <tr><td style="padding:14px 20px;"><div class="bone bone-square" style="height:13px;width:45%;"></div></td><td style="padding:14px 20px;"><div class="bone bone-square" style="height:13px;width:75%;"></div></td><td style="padding:14px 20px;"><div class="bone bone-square" style="height:13px;width:55%;"></div></td><td style="padding:14px 20px;"><div class="bone bone-square" style="height:13px;width:65%;"></div></td><td style="padding:14px 20px;"><div class="bone bone-badge bone-rounded"></div></td><td style="padding:14px 20px;"><div class="bone bone-btn bone-rounded"></div></td></tr>
-                        <tr><td style="padding:14px 20px;"><div class="bone bone-square" style="height:13px;width:60%;"></div></td><td style="padding:14px 20px;"><div class="bone bone-square" style="height:13px;width:80%;"></div></td><td style="padding:14px 20px;"><div class="bone bone-square" style="height:13px;width:70%;"></div></td><td style="padding:14px 20px;"><div class="bone bone-square" style="height:13px;width:40%;"></div></td><td style="padding:14px 20px;"><div class="bone bone-badge bone-rounded"></div></td><td style="padding:14px 20px;"><div class="bone bone-btn bone-rounded"></div></td></tr>
-                    </tbody>
-                </table>
-
-                <!-- Pagination -->
-                <div class="pagination" id="paginationBar" style="display:none;">
-                    <div class="pagination-info" id="pageInfo">Showing 0–0 of 0</div>
-                    <div class="pagination-controls" id="pageControls"></div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Image Modal -->
-    <div class="modal" id="imageModal" onclick="closeModal()">
-        <div class="modal-main" onclick="event.stopPropagation()">
-            <button class="modal-close" onclick="closeModal()">&times;</button>
-            <div class="modal-image-container">
-                <img class="modal-image" id="modalImage" src="" alt="Detection Snapshot">
-            </div>
-            <div class="crop-container" id="cropContainer">
-                <div class="crop-title">Extracted Entities</div>
-                <!-- Crops will be inserted here -->
-            </div>
-            <div class="modal-info-bar">
-                <span id="modalInfo"></span>
-                <span style="font-weight: 700; color: var(--accent);">AI VIGILANCE AUDIT</span>
-            </div>
-        </div>
-    </div>
-
-    <script src="/static/skeleton.js"></script>
-    <script>
-        // --- Theme Engine ---
-        function toggleTheme() {
-            const current = document.documentElement.getAttribute('data-theme');
-            const target = current === 'dark' ? 'light' : 'dark';
-            document.documentElement.setAttribute('data-theme', target);
-            localStorage.setItem('theme', target);
+    function renderLogRows(items) {
+        const body = document.getElementById('logsBody-ajax');
+        if(!items.length) {
+            body.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 100px; color: var(--text-secondary); opacity: 0.5;">Audit chain is empty for the current filter.</td></tr>';
+            return;
         }
-
-        // --- Notification Engine ---
-        function startNotificationListener() {
-            const evtSource = new EventSource("/api/notifications/stream");
-            evtSource.onmessage = function(event) {
-                const data = JSON.parse(event.data);
-                if (data.type === 'detection') showToast(data);
-            };
-            evtSource.onerror = function() {
-                evtSource.close();
-                setTimeout(startNotificationListener, 5000);
-            };
-        }
-
-        function showToast(data) {
-            const container = document.getElementById('toast-container');
-            const toast = document.createElement('div');
-            toast.className = 'toast';
-            toast.innerHTML = `
-                <img src="${data.thumbnail}" class="toast-thumb">
-                <div class="toast-content">
-                    <span class="toast-title">${data.target} spotted</span>
-                    <span class="toast-meta">${data.camera} • ${data.time}</span>
-                </div>
-                <div class="toast-progress"></div>
+        body.innerHTML = items.map(log => {
+            const date = new Date(log.timestamp).toLocaleString();
+            return `
+                <tr>
+                    <td style="font-family: monospace; font-weight: 700;">${date}</td>
+                    <td><span style="background: var(--bg-secondary); padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 800;">${log.camera_id}</span></td>
+                    <td style="color: var(--text-secondary); font-weight: 700;">${log.person_count} IDENTITIES</td>
+                    <td style="text-align: right;">
+                        <button class="op-btn" onclick='openLogModal(${JSON.stringify(log).replace(/'/g, "&apos;")})'>INSPECT</button>
+                    </td>
+                </tr>
             `;
-            container.appendChild(toast);
-            setTimeout(() => toast.classList.add('active'), 100);
-            const progress = toast.querySelector('.toast-progress');
-            progress.animate([{ width: '100%' }, { width: '0%' }], { duration: 5000, fill: 'forwards' });
-            setTimeout(() => {
-                toast.classList.remove('active');
-                setTimeout(() => toast.remove(), 600);
-            }, 5000);
-        }
+        }).join('');
+    }
 
-        // --- Server-Synced IST Clock ---
-        let _serverOffset = 0;
-        async function syncServerTime() {
-            try {
-                const t0 = Date.now();
-                const res = await fetch('/api/server_time');
-                const t1 = Date.now();
-                if (res.ok) {
-                    const data = await res.json();
-                    _serverOffset = data.timestamp_ms - t0 + Math.round((t1 - t0) / 2);
-                }
-            } catch(e) {}
-        }
-        function getServerIST() { return new Date(Date.now() + _serverOffset); }
-        function updateLiveClock() {
-            const timeString = getServerIST().toLocaleString('en-IN', {
-                timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
-            });
-            document.getElementById('live-clock').textContent = 'SYNC: ' + timeString + ' IST';
-        }
+    function renderLogPagination(total, size) {
+        const bar = document.getElementById('paginationBar-ajax');
+        const info = document.getElementById('pageInfo-ajax');
+        const ctrl = document.getElementById('pageControls-ajax');
+        const pages = Math.ceil(total / size);
+        
+        if(pages <= 1) { bar.style.display = 'none'; return; }
+        bar.style.display = 'flex';
+        info.textContent = `PAGE ${currentLogPage} OF ${pages}`;
+        
+        ctrl.innerHTML = `
+            <button class="pag-btn" onclick="loadDetectionLogs(${currentLogPage-1})" ${currentLogPage === 1 ? 'disabled' : ''}>PREV</button>
+            <button class="pag-btn" onclick="loadDetectionLogs(${currentLogPage+1})" ${currentLogPage === pages ? 'disabled' : ''}>NEXT</button>
+        `;
+    }
 
-        const urlParams = new URLSearchParams(window.location.search);
-        const preselectedCamera = urlParams.get('camera_id');
-
-        let camerasList = [];
-        let currentPage = 1;
-        let totalItems = 0;
-
-        function getPageSize() {
-            return parseInt(document.getElementById('pageSizeSelect').value) || 20;
-        }
-
-        function changePageSize() { goToPage(1); }
-
-        function goToPage(page) {
-            currentPage = page;
-            loadLogs();
-        }
-
-        async function loadCameras() {
-            try {
-                const res = await fetch('/api/cameras');
-                camerasList = await res.json();
-                const select = document.getElementById('camera-filter');
-                select.innerHTML = '<option value="">All Cameras</option>' +
-                    camerasList.map(cam =>
-                        `<option value="${cam.id}" ${cam.id === preselectedCamera ? 'selected' : ''}>${cam.id}</option>`
-                    ).join('');
-            } catch (err) {}
-        }
-
-        async function loadLogs() {
-            const tbody = document.getElementById('logsBody');
-            const cameraId = document.getElementById('camera-filter').value;
-            const pageSize = getPageSize();
-            const skip = (currentPage - 1) * pageSize;
-
-            Boneyard.tableRows('logsBody', 6, 6);
-
-            try {
-                let url = `/api/detection_snapshots?limit=${pageSize}&skip=${skip}`;
-                if (cameraId) url += `&camera_id=${encodeURIComponent(cameraId)}`;
-
-                const res = await fetch(url);
-                const data = await res.json();
-
-                // Handle both old array format and new paginated format
-                const logs  = Array.isArray(data) ? data : (data.items || []);
-                totalItems  = Array.isArray(data) ? logs.length : (data.total || logs.length);
-
-                if (logs.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-secondary);">No snapshots found</td></tr>';
-                    document.getElementById('paginationBar').style.display = 'none';
-                    return;
-                }
-
-                let lastDate = "";
-                tbody.innerHTML = logs.map(log => {
-                    const dt = log.timestamp ? new Date(log.timestamp) : null;
-                    const dateStr = dt ? dt.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : "Unknown Date";
-                    const timeStr = dt ? dt.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour12: true }) : "—";
-                    
-                    let dateHeader = "";
-                    if (dateStr !== lastDate) {
-                        lastDate = dateStr;
-                        dateHeader = `<tr class="date-group-header"><td colspan="6">${dateStr}</td></tr>`;
-                    }
-
-                    const cam = camerasList.find(c => c.id === log.camera_id) || {};
-                    let camIp = cam.source || '—';
-                    if (camIp.includes('@')) camIp = camIp.split('@').pop().split(':')[0].split('/')[0];
-
-                    const bbox = log.bbox_data || [];
-                    const names = bbox.map(b => b.name).filter(n => n && n !== 'Unknown');
-                    const personTags = names.length
-                         ? names.map(n => `<span class="person-tag">${n}</span>`).join('')
-                         : `<span style="color:var(--text-secondary)">${log.person_count || 0} persons</span>`;
-
-                    const safe = encodeURIComponent(JSON.stringify(log));
-                    return `
-                        ${dateHeader}
-                        <tr>
-                            <td>${timeStr}</td>
-                            <td>${log.camera_id}</td>
-                            <td>${log.camera_id}</td>
-                            <td>${camIp}</td>
-                            <td>${personTags}</td>
-                            <td>
-                                <button class="view-btn" title="View Snapshot"
-                                    onclick='openModal(JSON.parse(decodeURIComponent("${safe}")))'></button>
-                            </td>
-                        </tr>`;
-                }).join('');
-
-                renderPagination(totalItems, pageSize);
-
-            } catch (err) {
-                console.error(err);
-                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-secondary);">Failed to load</td></tr>';
-            }
-        }
-
-        function renderPagination(total, pageSize) {
-            const totalPages = Math.ceil(total / pageSize);
-            const bar = document.getElementById('paginationBar');
-            const info = document.getElementById('pageInfo');
-            const controls = document.getElementById('pageControls');
-
-            if (totalPages <= 1) { bar.style.display = 'none'; return; }
-            bar.style.display = 'flex';
-
-            const from = (currentPage - 1) * pageSize + 1;
-            const to   = Math.min(currentPage * pageSize, total);
-            info.textContent = `Showing ${from}–${to} of ${total}`;
-
-            // Build page buttons — show window of 5 around current
-            let html = `<button class="page-btn" onclick="goToPage(${currentPage-1})" ${currentPage===1?'disabled':''}>‹</button>`;
-
-            const delta = 2;
-            let start = Math.max(1, currentPage - delta);
-            let end   = Math.min(totalPages, currentPage + delta);
-            if (start > 1) html += `<button class="page-btn" onclick="goToPage(1)">1</button>${start>2?'<span style="padding:0 4px;color:var(--text-secondary)">…</span>':''}`;
-            for (let p = start; p <= end; p++) {
-                html += `<button class="page-btn ${p===currentPage?'active':''}" onclick="goToPage(${p})">${p}</button>`;
-            }
-            if (end < totalPages) html += `${end<totalPages-1?'<span style="padding:0 4px;color:var(--text-secondary)">…</span>':''}<button class="page-btn" onclick="goToPage(${totalPages})">${totalPages}</button>`;
-            html += `<button class="page-btn" onclick="goToPage(${currentPage+1})" ${currentPage===totalPages?'disabled':''}>›</button>`;
-
-            controls.innerHTML = html;
-        }
-
-        // Open image modal
-        function openModal(log) {
-            const imageUrl = `/api/snapshot_image?path=${encodeURIComponent(log.snapshot_path)}`;
-            document.getElementById('modalImage').src = imageUrl;
-            document.getElementById('modalInfo').textContent = `${log.timestamp} | ${log.camera_id} | ${log.person_count} Persons`;
-            
-            // Handle crops
-            const cropsContaier = document.getElementById('cropContainer');
-            const crops = log.person_crops || [];
-            if (crops.length > 0) {
-                cropsContaier.style.display = 'flex';
-                // Take only first 10 crops to avoid overflow
-                const cropHtml = crops.slice(0, 10).map(path => `
-                    <div class="crop-item">
-                        <img src="/api/snapshot_image?path=${encodeURIComponent(path)}" alt="Face crop">
-                    </div>
-                `).join('');
-                cropsContaier.innerHTML = '<div style="color: #fff; font-size: 14px; margin-bottom: 10px; border-bottom: 1px solid #444; padding-bottom: 5px;">Extracted Faces</div>' + cropHtml;
-            } else {
-                cropsContaier.innerHTML = '<div style="color: #fff; font-size: 14px; margin-bottom: 10px; border-bottom: 1px solid #444; padding-bottom: 5px;">No faces extracted</div>';
-            }
-            
-            document.getElementById('imageModal').classList.add('active');
-        }
-
-        // Close modal
-        function closeModal() {
-            document.getElementById('imageModal').classList.remove('active');
-        }
-
-        // Close on Escape key
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') closeModal();
+    function openLogModal(log) {
+        document.getElementById('modalImageLogs').src = `/api/snapshot_image?path=${encodeURIComponent(log.snapshot_path)}`;
+        const crops = document.getElementById('modalCrops');
+        crops.innerHTML = '';
+        (log.person_crops || []).forEach(path => {
+            const img = document.createElement('img');
+            img.src = `/api/snapshot_image?path=${encodeURIComponent(path)}`;
+            img.className = 'crop-item';
+            crops.appendChild(img);
         });
+        document.getElementById('imageModalLogs').style.display = 'flex';
+    }
 
-        // Initialize
-        document.addEventListener('DOMContentLoaded', () => {
-            const theme = localStorage.getItem('theme') || 'light';
-            document.getElementById('theme-checkbox').checked = (theme === 'dark');
-            syncServerTime().then(() => {
-                updateLiveClock();
-                setInterval(updateLiveClock, 1000);
-            });
-            startNotificationListener();
-            loadCameras().then(() => goToPage(1));
-            document.getElementById('camera-filter').addEventListener('change', () => goToPage(1));
-            setActiveNav();
+    function closeLogModal() {
+        document.getElementById('imageModalLogs').style.display = 'none';
+    }
+
+    async function populateCams() {
+        const res = await fetch('/api/cameras');
+        const cams = await res.json();
+        const sel = document.getElementById('camera-filter-logs');
+        cams.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.id; opt.textContent = c.id;
+            sel.appendChild(opt);
         });
+    }
 
-        function setActiveNav() {
-            const currentPath = window.location.pathname;
-            const navMap = {
-                '/dashboard': 'nav-dashboard',
-                '/': 'nav-live',
-                '/recordings_page': 'nav-recordings',
-                '/detection_logs': 'nav-logs',
-                '/people': 'nav-people',
-                '/search': 'nav-search',
-                '/journey': 'nav-journey',
-                '/analytics': 'nav-analytics',
-                '/registered_detections': 'nav-reg-logs',
-                '/cameras': 'nav-cameras',
-                '/add_camera': 'nav-add-camera'
-            };
-            
-            const activeId = navMap[currentPath];
-            if (activeId) {
-                document.getElementById(activeId)?.classList.add('active');
-            }
-        }
-    </script>
-</body>
-</html>
-
+    populateCams();
+    loadDetectionLogs();
+</script>
+{% endblock %}

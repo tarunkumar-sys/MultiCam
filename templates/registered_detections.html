@@ -1,531 +1,78 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Vigilance - Registered Detections</title>
-    <link rel="stylesheet" href="/static/skeleton.css">
-    <style>
-        :root {
-            --bg-primary: #f0f0f0;
-            --bg-secondary: #f4f5f7;
-            --bg-panel: #ffffff;
-            --text-primary: #333333;
-            --text-secondary: #666666;
-            --border-color: #dddddd;
-            --sidebar-bg: #2d2d2d;
-            --sidebar-active: #3a3a3a;
-            --accent: #c41e3a;
-            --accent-hover: #a01830;
-            --shadow: 0 2px 10px rgba(0,0,0,0.05);
-        }
+{% extends base_template %}
 
-        [data-theme="dark"] {
-            --bg-primary: #121212;
-            --bg-secondary: #1e1e1e;
-            --bg-panel: #252525;
-            --text-primary: #e0e0e0;
-            --text-secondary: #aaaaaa;
-            --border-color: #333333;
-            --sidebar-bg: #1a1a1a;
-            --sidebar-active: #2d2d2d;
-            --shadow: 0 4px 20px rgba(0,0,0,0.4);
-        }
-
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
-            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            background: var(--bg-primary); 
-            color: var(--text-primary);
-            height: 100vh;
-            overflow: hidden;
-            display: flex;
-            transition: background 0.3s, color 0.3s;
-        }
-    </style>
-
-    <!-- Inline script to prevent white flash -->
-    <script>
-        (function() {
-            const theme = localStorage.getItem('theme') || 'light';
-            document.documentElement.setAttribute('data-theme', theme);
-        })();
-    </script>
-    
-    <style>
-        .app-container { display: flex; width: 100%; height: 100vh; }
-        
-        /* Unified Sidebar Styles */
-        .sidebar {
-            width: 260px;
-            background: var(--sidebar-bg);
-            border-right: 1px solid var(--border-color);
-            display: flex;
-            flex-direction: column;
-            z-index: 100;
-            overflow-y: auto;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        .sidebar-header {
-            padding: 20px;
-            background: var(--accent);
-            color: #fff;
-            font-size: 18px;
-            font-weight: 800;
-            letter-spacing: 1px;
-            text-align: center;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .sidebar-info {
-            padding: 20px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            background: rgba(0,0,0,0.05);
-            border-bottom: 1px solid rgba(255,255,255,0.05);
-        }
-        .user-avatar {
-            width: 40px; height: 40px;
-            background: var(--accent);
-            border-radius: 10px;
-            display: flex; align-items: center; justify-content: center;
-            color: #fff; font-weight: bold; font-size: 18px;
-        }
-        .user-details { overflow: hidden; }
-        .user-name { font-size: 14px; font-weight: 600; color: #fff; white-space: nowrap; text-overflow: ellipsis; }
-        .user-role { font-size: 11px; color: #aaa; text-transform: uppercase; }
-
-        .sidebar-section { border-bottom: 1px solid rgba(255,255,255,0.05); }
-        .sidebar-title {
-            padding: 15px 20px 8px 20px;
-            color: #888;
-            font-size: 11px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            font-weight: 700;
-        }
-        .sidebar-menu { list-style: none; padding-bottom: 10px; }
-        .sidebar-menu li a {
-            display: flex;
-            align-items: center;
-            padding: 12px 20px;
-            color: #bbb;
-            text-decoration: none;
-            font-size: 13px;
-            transition: all 0.2s;
-            border-left: 4px solid transparent;
-        }
-        .sidebar-menu li a:hover {
-            background: rgba(255,255,255,0.05);
-            color: #fff;
-        }
-        .sidebar-menu li a.active {
-            background: rgba(196, 30, 58, 0.1);
-            color: #fff;
-            border-left-color: var(--accent);
-            font-weight: 600;
-        }
-        .sidebar-footer {
-            margin-top: auto;
-            padding: 20px;
-            background: rgba(0,0,0,0.1);
-            border-top: 1px solid rgba(255,255,255,0.05);
-        }
-        .theme-toggle-container {
-            display: flex; align-items: center; justify-content: space-between;
-            margin-bottom: 15px;
-        }
-        .theme-label { color: #888; font-size: 12px; font-weight: 600; }
-        .theme-switch { position: relative; display: inline-block; width: 40px; height: 20px; }
-        .theme-switch input { opacity: 0; width: 0; height: 0; }
-        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #444; transition: .4s; border-radius: 20px; }
-        .slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
-        input:checked + .slider { background-color: var(--accent); }
-        input:checked + .slider:before { transform: translateX(20px); }
-
-        .logout-btn-side {
-            width: 100%;
-            padding: 12px;
-            background: rgba(255,255,255,0.05);
-            border: 1px solid rgba(255,255,255,0.1);
-            color: #ef4444;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 13px;
-            font-weight: 600;
-            display: flex; align-items: center; justify-content: center; gap: 8px;
-            transition: all 0.2s;
-        }
-        .logout-btn-side:hover {
-            background: rgba(239, 68, 68, 0.1);
-            border-color: #ef4444;
-            color: #fff;
-        }
-
-        /* Main Content */
-        .main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-        .toolbar {
-            padding: 20px 32px;
-            background: var(--bg-panel);
-            border-bottom: 1px solid var(--border-color);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            box-shadow: var(--shadow);
-            z-index: 10;
-        }
-        .toolbar-title { font-size: 1.25rem; font-weight: 700; color: var(--text-primary); }
-        .content { flex: 1; padding: 32px; overflow-y: auto; background: var(--bg-secondary); }
-
-        /* Table Design */
-        .logs-table {
-            width: 100%;
-            background: var(--bg-panel);
-            border-radius: 12px;
-            overflow: hidden;
-            border-collapse: collapse;
-            box-shadow: var(--shadow);
-        }
-        .logs-table th {
-            background: var(--accent);
-            color: white;
-            padding: 16px 24px;
-            text-align: left;
-            font-size: 0.85rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        .logs-table td {
-            padding: 16px 24px;
-            border-bottom: 1px solid var(--border-color);
-            color: var(--text-primary);
-            font-size: 0.95rem;
-        }
-        .logs-table tr:last-child td { border-bottom: none; }
-        .logs-table tr:hover { background: var(--bg-secondary); }
-
-        .person-info { display: flex; align-items: center; gap: 16px; }
-        .person-thumb {
-            width: 48px; height: 48px;
-            border-radius: 50%;
-            object-fit: cover;
-            border: 2px solid var(--accent);
-            background: var(--bg-primary);
-        }
-
-        .camera-badge {
-            background: var(--bg-primary);
-            padding: 4px 10px;
-            border-radius: 6px;
-            font-size: 0.8rem;
-            font-weight: 600;
-            color: var(--text-primary);
-            border: 1px solid var(--border-color);
-        }
-
-        .empty-state {
-            padding: 80px;
-            text-align: center;
-            color: var(--text-secondary);
-            font-size: 1.1rem;
-        }
-
-        .btn-action {
-            width: 36px; height: 36px;
-            border-radius: 8px;
-            border: 1px solid var(--border-color);
-            background: var(--bg-panel);
-            color: var(--text-primary);
-            cursor: pointer;
-            display: flex; align-items: center; justify-content: center;
-            transition: all 0.2s;
-        }
-        .btn-action:hover { background: var(--accent); color: white; border-color: var(--accent); }
-
-        .btn-back-link {
-            text-decoration: none;
-            color: var(--text-secondary);
-            font-size: 0.9rem;
-            display: flex; align-items: center; gap: 8px;
-            transition: color 0.2s;
-        }
-        .btn-back-link:hover { color: var(--accent); }
-
-        .toast {
-            width: 320px;
-            background: var(--bg-panel);
-            border-radius: 12px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.25);
-            border: 1px solid var(--border-color);
-            padding: 16px;
-            display: flex;
-            gap: 12px;
-            align-items: center;
-            transform: translateX(400px);
-            transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            pointer-events: auto;
-            position: relative;
-            overflow: hidden;
-        }
-        .toast.active { transform: translateX(0); }
-        .toast-thumb {
-            width: 50px; height: 50px;
-            border-radius: 8px; object-fit: cover;
-            border: 2px solid var(--accent);
-        }
-        .toast-content { flex: 1; }
-        .toast-title { font-weight: 700; font-size: 14px; color: var(--text-primary); }
-        .toast-meta { font-size: 11px; color: var(--text-secondary); display: block; }
-        .toast-progress {
-            position: absolute; bottom: 0; left: 0;
-            height: 3px; background: var(--accent);
-            width: 100%;
-        }
-    </style>
-</head>
-<body>
-    <div class="app-container">
-        <aside class="sidebar">
-            <div class="sidebar-header">AI VIGILANCE</div>
-            
-            <div class="sidebar-info">
-                <div class="user-avatar">A</div>
-                <div class="user-details">
-                    <div class="user-name">Administrator</div>
-                    <div class="user-role">System Operator</div>
-                </div>
-            </div>
-
-            <div class="sidebar-section">
-                <div class="sidebar-title">Monitoring</div>
-                <ul class="sidebar-menu">
-                    <li><a href="/" id="nav-live">Live Stream</a></li>
-                    <li><a href="/dashboard" id="nav-dashboard">Dashboard</a></li>
-                    <li><a href="/recordings_page" id="nav-recordings">Recordings</a></li>
-                    <li><a href="/detection_logs" id="nav-logs">Detection Logs</a></li>
-                </ul>
-            </div>
-            <div class="sidebar-section">
-                <div class="sidebar-title">Analytics</div>
-                <ul class="sidebar-menu">
-                    <li><a href="/people" id="nav-people">People Registry</a></li>
-                    <li><a href="/search" id="nav-search">Search & Filters</a></li>
-                    <li><a href="/journey" id="nav-journey">Journey Tracking</a></li>
-                    <li><a href="/analytics" id="nav-analytics">Analytics</a></li>
-                    <li><a href="/registered_detections" id="nav-reg-logs">Identity Logs</a></li>
-                </ul>
-            </div>
-            <div class="sidebar-section">
-                <div class="sidebar-title">Operations</div>
-                <ul class="sidebar-menu">
-                    <li><a href="/cameras" id="nav-cameras">Cameras</a></li>
-                    <li><a href="/add_camera" id="nav-add-camera">Add Camera</a></li>
-                </ul>
-            </div>
-            
-            <div class="sidebar-footer">
-                <div class="theme-toggle-container">
-                    <span class="theme-label">Dark Mode</span>
-                    <label class="theme-switch">
-                        <input type="checkbox" id="theme-checkbox" onchange="toggleTheme()">
-                        <span class="slider"></span>
-                    </label>
-                </div>
-                <button class="logout-btn-side" onclick="location.href='/logout'">
-                    🚪 Logout Session
-                </button>
-            </div>
-        </aside>
-
-        <div class="toast-container" id="toast-container"></div>
-
-        <div class="main-content">
-            <div class="toolbar">
-                <div style="display: flex; flex-direction: column; gap: 4px;">
-                    <a href="/people" class="btn-back-link">← Back to Registry</a>
-                    <h1 class="toolbar-title">Detection History: <span id="personName" style="color: var(--accent);">All Registered</span></h1>
-                </div>
-                <div id="live-clock" style="font-family: monospace; color: var(--text-secondary); font-size: 0.9rem;"></div>
-            </div>
-            <div class="content">
-                <table class="logs-table">
-                    <thead>
-                        <tr>
-                            <th>Time</th>
-                            <th>Person Name</th>
-                            <th>Camera Info</th>
-                            <th style="text-align: center;">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="logsBody">
-                        <!-- Skeleton rows while polling DB -->
-                        <tr><td style="padding:16px 24px;"><div class="bone bone-square" style="height:13px;width:65%;"></div></td><td style="padding:16px 24px;"><div style="display:flex;align-items:center;gap:16px;"><div class="bone bone-circle" style="width:48px;height:48px;"></div><div class="bone bone-square" style="height:13px;width:100px;"></div></div></td><td style="padding:16px 24px;"><div class="bone bone-badge bone-rounded"></div><div class="bone bone-square" style="height:10px;width:80%;margin-top:4px;"></div></td><td style="padding:16px 24px;text-align:center;"><div class="bone bone-btn bone-rounded" style="margin:0 auto;"></div></td></tr>
-                        <tr><td style="padding:16px 24px;"><div class="bone bone-square" style="height:13px;width:75%;"></div></td><td style="padding:16px 24px;"><div style="display:flex;align-items:center;gap:16px;"><div class="bone bone-circle" style="width:48px;height:48px;"></div><div class="bone bone-square" style="height:13px;width:120px;"></div></div></td><td style="padding:16px 24px;"><div class="bone bone-badge bone-rounded"></div><div class="bone bone-square" style="height:10px;width:60%;margin-top:4px;"></div></td><td style="padding:16px 24px;text-align:center;"><div class="bone bone-btn bone-rounded" style="margin:0 auto;"></div></td></tr>
-                        <tr><td style="padding:16px 24px;"><div class="bone bone-square" style="height:13px;width:55%;"></div></td><td style="padding:16px 24px;"><div style="display:flex;align-items:center;gap:16px;"><div class="bone bone-circle" style="width:48px;height:48px;"></div><div class="bone bone-square" style="height:13px;width:90px;"></div></div></td><td style="padding:16px 24px;"><div class="bone bone-badge bone-rounded"></div><div class="bone bone-square" style="height:10px;width:70%;margin-top:4px;"></div></td><td style="padding:16px 24px;text-align:center;"><div class="bone bone-btn bone-rounded" style="margin:0 auto;"></div></td></tr>
-                        <tr><td style="padding:16px 24px;"><div class="bone bone-square" style="height:13px;width:80%;"></div></td><td style="padding:16px 24px;"><div style="display:flex;align-items:center;gap:16px;"><div class="bone bone-circle" style="width:48px;height:48px;"></div><div class="bone bone-square" style="height:13px;width:110px;"></div></div></td><td style="padding:16px 24px;"><div class="bone bone-badge bone-rounded"></div><div class="bone bone-square" style="height:10px;width:90%;margin-top:4px;"></div></td><td style="padding:16px 24px;text-align:center;"><div class="bone bone-btn bone-rounded" style="margin:0 auto;"></div></td></tr>
-                    </tbody>
-                </table>
-            </div>
+{% block content %}
+<div class="content" style="padding: 32px; overflow-y: auto; height: 100%;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+            <button onclick="Router.navigate('/people')" class="btn-link" style="background:none; border:none; color:var(--text-secondary); cursor:pointer; font-size:13px; text-align:left; padding:0;">← Back to Registry</button>
+            <h1 style="font-size: 24px; font-weight: 800;">Identity Audit History: <span id="person-header-name" style="color: var(--accent);">All Profiles</span></h1>
         </div>
+        <button class="btn btn-primary" onclick="loadAuditLogs()">Refresh Audit</button>
     </div>
 
-    <script src="/static/skeleton.js"></script>
-    <script>
-        // --- Theme Management ---
-        function toggleTheme() {
-            const currentTheme = document.documentElement.getAttribute('data-theme');
-            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-            document.documentElement.setAttribute('data-theme', newTheme);
-            localStorage.setItem('theme', newTheme);
-        }
+    <table class="logs-table" style="width: 100%; border-collapse: collapse; background: var(--bg-panel); border-radius: 12px; overflow: hidden; box-shadow: var(--shadow); border: 1px solid var(--border-color);">
+        <thead>
+            <tr style="background: var(--accent); color: white;">
+                <th style="padding: 16px 20px; text-align: left;">Timestamp</th>
+                <th style="padding: 16px 20px; text-align: left;">Subject</th>
+                <th style="padding: 16px 20px; text-align: left;">Sensor / Point of Capture</th>
+                <th style="padding: 16px 20px; text-align: center;">Evidence</th>
+            </tr>
+        </thead>
+        <tbody id="audit-logs-ajax">
+            <tr><td colspan="4" style="text-align:center; padding:40px;">Scanning identity database...</td></tr>
+        </tbody>
+    </table>
+</div>
 
-        // --- Notification Engine ---
-        function startNotificationListener() {
-            const evtSource = new EventSource("/api/notifications/stream");
-            evtSource.onmessage = function(event) {
-                const data = JSON.parse(event.data);
-                if (data.type === 'detection') {
-                    showToast(data);
-                }
-            };
-            evtSource.onerror = function() {
-                evtSource.close();
-                setTimeout(startNotificationListener, 5000);
-            };
-        }
+<script>
+    document.getElementById('page-title').textContent = 'Forensic Identity Audit Logs';
 
-        function showToast(data) {
-            const container = document.getElementById('toast-container');
-            const toast = document.createElement('div');
-            toast.className = 'toast';
-            toast.innerHTML = `
-                <img src="${data.thumbnail}" class="toast-thumb">
-                <div class="toast-content">
-                    <span class="toast-title">${data.target} spotted</span>
-                    <span class="toast-meta">${data.camera} • ${data.time}</span>
-                </div>
-                <div class="toast-progress"></div>
-            `;
-            container.appendChild(toast);
-            setTimeout(() => toast.classList.add('active'), 100);
-            const progress = toast.querySelector('.toast-progress');
-            progress.animate([{ width: '100%' }, { width: '0%' }], { duration: 5000, fill: 'forwards' });
-            setTimeout(() => {
-                toast.classList.remove('active');
-                setTimeout(() => toast.remove(), 600);
-            }, 5000);
-        }
+    const auditParams = new URLSearchParams(window.location.search);
+    const filterName = auditParams.get('person_name');
+    if(filterName) document.getElementById('person-header-name').textContent = filterName;
 
-        // --- Server-Synced IST Clock ---
-        let _serverOffset = 0;
-        async function syncServerTime() {
-            try {
-                const t0 = Date.now();
-                const res = await fetch('/api/server_time');
-                const t1 = Date.now();
-                if (res.ok) {
-                    const data = await res.json();
-                    const serverMs = data.timestamp_ms;
-                    _serverOffset = serverMs - t0 + Math.round((t1 - t0) / 2);
-                }
-            } catch(e) {}
-        }
-        function getServerIST() { return new Date(Date.now() + _serverOffset); }
-        function updateLiveClock() {
-            const timeString = getServerIST().toLocaleString('en-IN', {
-                timeZone: 'Asia/Kolkata',
-                hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
-            });
-            document.getElementById('live-clock').textContent = 'SYNC: ' + timeString + ' IST';
-        }
-
-        document.addEventListener('DOMContentLoaded', () => {
-            const savedTheme = localStorage.getItem('theme') || 'light';
-            document.getElementById('theme-checkbox').checked = (savedTheme === 'dark');
-            syncServerTime().then(() => {
-                updateLiveClock();
-                setInterval(updateLiveClock, 1000);
-            });
-            startNotificationListener();
-            loadLogs();
-            setActiveNav();
-        });
-
-        function setActiveNav() {
-            const currentPath = window.location.pathname;
-            const navMap = {
-                '/dashboard': 'nav-dashboard',
-                '/': 'nav-live',
-                '/recordings_page': 'nav-recordings',
-                '/detection_logs': 'nav-logs',
-                '/people': 'nav-people',
-                '/search': 'nav-search',
-                '/journey': 'nav-journey',
-                '/analytics': 'nav-analytics',
-                '/registered_detections': 'nav-reg-logs',
-                '/cameras': 'nav-cameras',
-                '/add_camera': 'nav-add-camera'
-            };
+    async function loadAuditLogs() {
+        const body = document.getElementById('audit-logs-ajax');
+        try {
+            const url = filterName ? `/api/identity/audit?name=${encodeURIComponent(filterName)}` : '/api/identity/audit';
+            const res = await fetch(url);
+            const logs = await res.json();
             
-            const activeId = navMap[currentPath];
-            if (activeId) {
-                document.getElementById(activeId)?.classList.add('active');
+            if(!logs.length) {
+                body.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:40px;">No matching identity encounters found.</td></tr>';
+                return;
             }
-        }
-
-        const urlParams = new URLSearchParams(window.location.search);
-        const personName = urlParams.get('person_name');
-        if (personName) document.getElementById('personName').textContent = personName;
-
-        async function loadLogs() {
-            const tbody = document.getElementById('logsBody');
-            // Show skeleton table rows while polling
-            Boneyard.tableRows('logsBody', 4, 4);
-            try {
-                const url = personName ? `/api/registered_detections?name=${encodeURIComponent(personName)}` : '/api/registered_detections';
-                const res = await fetch(url);
-                const logs = await res.json();
-                
-                if (logs.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No recorded encounters in the log.</td></tr>';
-                    return;
-                }
-                
-                tbody.innerHTML = logs.map((l, idx) => {
-                    const imageUrl = l.image_path ? `/api/snapshot_image?path=${encodeURIComponent(l.image_path)}` : 'https://ui-avatars.com/api/?name=' + encodeURIComponent(l.person_name);
-                    return `
-                    <tr style="animation: fadeIn 0.3s forwards; animation-delay: ${idx * 0.05}s; opacity: 0;">
-                        <td><span style="font-family: monospace; font-weight: 600;">${l.timestamp}</span></td>
-                        <td>
-                            <div class="person-info">
-                                <img src="${imageUrl}" class="person-thumb" 
-                                     onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(l.person_name)}'" 
-                                     onclick="window.open('${imageUrl}')" title="Enlarge Event Frame">
-                                <strong>${l.person_name}</strong>
+            
+            body.innerHTML = logs.map(l => {
+                const img = l.image_path ? `/api/snapshot_image?path=${encodeURIComponent(l.image_path)}` : '/static/placeholder.jpg';
+                return `
+                    <tr style="border-bottom:1px solid var(--border-color);">
+                        <td style="padding:16px 20px; font-family:monospace; font-weight:600;">${l.timestamp}</td>
+                        <td style="padding:16px 20px;">
+                            <div style="display:flex; align-items:center; gap:12px;">
+                                <img src="${img}" style="width:40px; height:40px; border-radius:50%; object-fit:cover; border:2px solid var(--accent);">
+                                <span style="font-weight:700;">${l.person_name}</span>
                             </div>
                         </td>
-                        <td>
-                            <div class="camera-badge">${l.camera_id}</div>
-                            <div style="font-size: 11px; margin-top: 4px; color: var(--text-secondary);">IP: ${l.camera_ip}</div>
+                        <td style="padding:16px 20px;">
+                            <span style="background:var(--bg-secondary); padding:4px 10px; border-radius:4px; font-size:12px; font-weight:700;">${l.camera_id}</span>
+                            <div style="font-size:11px; color:var(--text-secondary); margin-top:4px;">IP: ${l.camera_ip}</div>
                         </td>
-                        <td>
-                            <div style="display: flex; justify-content: center;">
-                                <button class="btn-action" onclick="window.open('${imageUrl}')" title="Investigation Frame">
-                                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                                </button>
-                            </div>
+                        <td style="padding:16px 20px; text-align:center;">
+                            <button class="btn-sm" onclick="window.open('${img}')">View Frame</button>
                         </td>
                     </tr>
-                    `
-                }).join('');
-            } catch (err) {
-                tbody.innerHTML = '<tr><td colspan="4" class="empty-state" style="color: var(--accent);">Database connectivity error.</td></tr>';
-            }
-        }
-    </script>
-    <style>
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-    </style>
-</body>
-</html>
+                `;
+            }).join('');
+        } catch(e) {}
+    }
+
+    loadAuditLogs();
+</script>
+
+<style>
+    .btn-link:hover { color: var(--accent) !important; }
+    .btn-sm { padding: 6px 12px; font-size: 11px; font-weight: 700; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary); cursor: pointer; }
+</style>
+{% endblock %}

@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  streaming-server:
+    build: .
+    command: python media/server.py
+    ports:
+      - "8001:8001"
+    volumes:
+      - .:/app
+    environment:
+      - PYTHONUNBUFFERED=1
+
+  ai-server:
+    build: .
+    command: uvicorn app:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    depends_on:
+      - streaming-server
+    environment:
+      - STREAM_SERVER_URL=http://streaming-server:8001
+      - PYTHONUNBUFFERED=1

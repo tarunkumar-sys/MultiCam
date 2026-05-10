@@ -1,326 +1,179 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI Vigilance — Cameras</title>
-<link rel="stylesheet" href="/static/skeleton.css">
-<script>(function(){const t=localStorage.getItem('theme')||'light';document.documentElement.setAttribute('data-theme',t);})();</script>
-<style>
-:root{--bg-primary:#f0f0f0;--bg-secondary:#f4f5f7;--bg-panel:#fff;--text-primary:#333;--text-secondary:#666;--border-color:#ddd;--sidebar-bg:#2d2d2d;--accent:#c41e3a;--accent-hover:#a01830;--shadow:0 2px 10px rgba(0,0,0,.05);}
-[data-theme="dark"]{--bg-primary:#121212;--bg-secondary:#1e1e1e;--bg-panel:#252525;--text-primary:#e0e0e0;--text-secondary:#aaa;--border-color:#333;--sidebar-bg:#1a1a1a;--shadow:0 4px 20px rgba(0,0,0,.4);}
-*{margin:0;padding:0;box-sizing:border-box;}
-body{font-family:'Segoe UI',Arial,sans-serif;background:var(--bg-primary);color:var(--text-primary);height:100vh;overflow:hidden;transition:background .3s,color .3s;}
-.app-container{display:flex;height:100vh;}
-/* sidebar */
-.sidebar{width:260px;background:var(--sidebar-bg);border-right:1px solid var(--border-color);display:flex;flex-direction:column;z-index:100;overflow-y:auto;}
-.sidebar-header{padding:20px;background:var(--accent);color:#fff;font-size:18px;font-weight:800;letter-spacing:1px;text-align:center;}
-.sidebar-info{padding:20px;display:flex;align-items:center;gap:12px;background:rgba(0,0,0,.05);border-bottom:1px solid rgba(255,255,255,.05);}
-.user-avatar{width:40px;height:40px;background:var(--accent);border-radius:10px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:bold;font-size:18px;}
-.user-name{font-size:14px;font-weight:600;color:#fff;}.user-role{font-size:11px;color:#aaa;text-transform:uppercase;}
-.sidebar-section{border-bottom:1px solid rgba(255,255,255,.05);}
-.sidebar-title{padding:15px 20px 8px;color:#888;font-size:11px;text-transform:uppercase;letter-spacing:1px;font-weight:700;}
-.sidebar-menu{list-style:none;padding-bottom:10px;}
-.sidebar-menu li a{display:flex;align-items:center;padding:12px 20px;color:#bbb;text-decoration:none;font-size:13px;transition:all .2s;border-left:4px solid transparent;}
-.sidebar-menu li a:hover{background:rgba(255,255,255,.05);color:#fff;}
-.sidebar-menu li a.active{background:rgba(196,30,58,.1);color:#fff;border-left-color:var(--accent);font-weight:600;}
-.sidebar-footer{margin-top:auto;padding:20px;background:rgba(0,0,0,.1);border-top:1px solid rgba(255,255,255,.05);}
-.theme-toggle-container{display:flex;align-items:center;justify-content:space-between;margin-bottom:15px;}
-.theme-label{color:#888;font-size:12px;font-weight:600;}
-.theme-switch{position:relative;display:inline-block;width:40px;height:20px;}
-.theme-switch input{opacity:0;width:0;height:0;}
-.slider{position:absolute;cursor:pointer;inset:0;background:#444;transition:.4s;border-radius:20px;}
-.slider:before{position:absolute;content:"";height:14px;width:14px;left:3px;bottom:3px;background:#fff;transition:.4s;border-radius:50%;}
-input:checked+.slider{background:var(--accent);}
-input:checked+.slider:before{transform:translateX(20px);}
-.logout-btn-side{width:100%;padding:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#ef4444;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .2s;}
-.logout-btn-side:hover{background:rgba(239,68,68,.1);border-color:#ef4444;color:#fff;}
-/* main */
-.main-content{flex:1;display:flex;flex-direction:column;overflow:hidden;}
-.toolbar{background:var(--bg-panel);padding:12px 20px;border-bottom:1px solid var(--border-color);display:flex;justify-content:space-between;align-items:center;}
-.toolbar-title{font-size:16px;font-weight:600;color:var(--text-primary);}
-.content{flex:1;padding:20px;overflow-y:auto;background:var(--bg-secondary);display:grid;grid-template-columns:1fr 380px;gap:20px;align-items:start;}
-/* camera list panel */
-.panel{background:var(--bg-panel);border:1px solid var(--border-color);border-radius:10px;box-shadow:var(--shadow);overflow:hidden;}
-.panel-header{padding:14px 18px;border-bottom:1px solid var(--border-color);font-weight:700;font-size:14px;color:var(--text-primary);display:flex;justify-content:space-between;align-items:center;}
-.data-table{width:100%;border-collapse:collapse;}
-.data-table th,.data-table td{padding:12px 16px;text-align:left;border-bottom:1px solid var(--border-color);}
-.data-table th{background:var(--accent);color:#fff;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;}
-.data-table td{font-size:13px;color:var(--text-primary);}
-.data-table tr:last-child td{border-bottom:none;}
-.data-table tr:hover td{background:var(--bg-secondary);}
-.status-online{color:#27ae60;font-weight:600;}
-.rec-btn{padding:5px 12px;font-size:12px;font-weight:600;border:none;border-radius:4px;cursor:pointer;transition:.2s;min-width:52px;}
-.rec-on{background:#e74c3c;color:#fff;}
-.rec-off{background:var(--accent);color:#fff;}
-.rec-on:hover{background:#c0392b;}
-.rec-off:hover{background:var(--accent-hover);}
-.btn{padding:5px 12px;border:1px solid var(--border-color);background:var(--bg-panel);color:var(--text-primary);font-size:12px;cursor:pointer;border-radius:4px;transition:all .2s;}
-.btn:hover{background:var(--bg-secondary);}
-.btn-danger{background:#e74c3c;border-color:#e74c3c;color:#fff;}
-.btn-danger:hover{background:#c0392b;}
-.btn-edit{background:#2196f3;border-color:#2196f3;color:#fff;}
-.btn-edit:hover{background:#1976d2;}
+{% extends base_template %}
 
-/* Modal Styles */
-.modal {
-    display: none;
-    position: fixed;
-    z-index: 1000;
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0,0,0,0.5);
-    backdrop-filter: blur(4px);
-}
-.modal-content {
-    background-color: var(--bg-panel);
-    margin: 10% auto;
-    padding: 24px;
-    border: 1px solid var(--border-color);
-    width: 400px;
-    border-radius: 12px;
-    box-shadow: var(--shadow);
-    animation: slideDown 0.3s ease-out;
-}
-@keyframes slideDown {
-    from { transform: translateY(-20px); opacity: 0; }
-    to { transform: translateY(0); opacity: 1; }
-}
-.modal-header {
-    margin-bottom: 20px;
-    padding-bottom: 10px;
-    border-bottom: 1px solid var(--border-color);
-    font-weight: 700;
-    color: var(--text-primary);
-}
-.modal-footer {
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-    margin-top: 20px;
-}
-.source-hint{font-size:11px;color:var(--text-secondary);margin-top:5px;}
-</style>
-</head>
-<body>
-<div class="app-container">
-  <aside class="sidebar">
-    <div class="sidebar-header">AI VIGILANCE</div>
-    <div class="sidebar-info">
-      <div class="user-avatar">A</div>
-      <div><div class="user-name">Administrator</div><div class="user-role">System Operator</div></div>
-    </div>
-    <div class="sidebar-section">
-      <div class="sidebar-title">Monitoring</div>
-      <ul class="sidebar-menu">
-        <li><a href="/" id="nav-live">Live Stream</a></li>
-        <li><a href="/dashboard" id="nav-dashboard">Dashboard</a></li>
-        <li><a href="/recordings_page" id="nav-recordings">Recordings</a></li>
-        <li><a href="/detection_logs" id="nav-logs">Detection Logs</a></li>
-      </ul>
-    </div>
-    <div class="sidebar-section">
-      <div class="sidebar-title">Analytics</div>
-      <ul class="sidebar-menu">
-        <li><a href="/people" id="nav-people">People Registry</a></li>
-        <li><a href="/search" id="nav-search">Search & Filters</a></li>
-        <li><a href="/journey" id="nav-journey">Journey Tracking</a></li>
-        <li><a href="/analytics" id="nav-analytics">Analytics</a></li>
-        <li><a href="/registered_detections" id="nav-reg-logs">Identity Logs</a></li>
-      </ul>
-    </div>
-    <div class="sidebar-section">
-      <div class="sidebar-title">Operations</div>
-      <ul class="sidebar-menu">
-        <li><a href="/cameras" id="nav-cameras">Cameras</a></li>
-      </ul>
-    </div>
-    <div class="sidebar-footer">
-      <div class="theme-toggle-container">
-        <span class="theme-label">Dark Mode</span>
-        <label class="theme-switch"><input type="checkbox" id="theme-checkbox" onchange="toggleTheme()"><span class="slider"></span></label>
-      </div>
-      <button class="logout-btn-side" onclick="location.href='/logout'">🚪 Logout</button>
-    </div>
-  </aside>
-
-  <div class="main-content">
-    <div class="toolbar">
-      <h1 class="toolbar-title">Camera Management</h1>
-      <div id="live-clock" style="font-weight:600;color:var(--text-secondary);font-size:13px;"></div>
-    </div>
-
-    <div class="content">
-      <!-- LEFT: Camera list -->
-      <div class="panel">
-        <div class="panel-header">
-          <span>Active Cameras</span>
-          <span id="cam-count" style="font-size:12px;color:var(--text-secondary);font-weight:400;"></span>
+{% block content %}
+<div class="sensors-wrapper" style="padding: 32px; height: 100%; overflow-y: auto;">
+    <div class="header-section" style="margin-bottom: 32px; display: flex; justify-content: space-between; align-items: flex-end;">
+        <div>
+            <h2 style="font-size: 28px; font-weight: 800; letter-spacing: -0.5px;">Sensor Network</h2>
+            <p style="color: var(--text-secondary); font-size: 14px;">Manage active capture nodes and visual intelligence sources.</p>
         </div>
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Source</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody id="camera-list">
-            <tr><td colspan="4" style="padding:20px;text-align:center;"><div class="bone bone-square" style="height:13px;width:60%;margin:auto;"></div></td></tr>
-          </tbody>
-        </table>
-      </div>
-
-      </div>
-
-      <!-- Edit Modal -->
-      <div id="editModal" class="modal">
-        <div class="modal-content">
-          <div class="modal-header">Edit Camera Source</div>
-          <form id="edit-form">
-            <input type="hidden" id="edit-camera-id" name="camera_id">
-            <div class="form-group">
-                <label>Camera ID</label>
-                <input type="text" id="display-camera-id" disabled>
-            </div>
-            <div class="form-group">
-              <label>New Source / URL</label>
-              <input type="text" id="edit-source" name="source" placeholder="e.g. 0 or rtsp://..." required>
-            </div>
-            <div class="modal-footer">
-              <button type="button" class="btn" onclick="closeEditModal()">Cancel</button>
-              <button type="submit" class="btn btn-edit">Save Changes</button>
-            </div>
-          </form>
-        </div>
-      </div>
+        <button class="btn btn-primary" onclick="Router.navigate('/add_camera')">
+            <i class="fa-solid fa-plus"></i> ATTACH NEW SENSOR
+        </button>
     </div>
-  </div>
+
+    <div class="sensors-grid" style="display: grid; grid-template-columns: 1fr 340px; gap: 32px; align-items: start;">
+        <!-- Left: Sensor List -->
+        <div class="card" style="overflow: hidden;">
+            <div style="padding: 20px 24px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="font-size: 15px; font-weight: 700;">Active Matrix</h3>
+                <div class="badge" id="cam-count-display" style="background: var(--bg-secondary); padding: 4px 10px; border-radius: 100px; font-size: 11px; font-weight: 700;">0 CONNECTED</div>
+            </div>
+            
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="background: rgba(255,255,255,0.02); text-align: left;">
+                        <th style="padding: 16px 24px; font-size: 11px; font-weight: 800; color: var(--text-secondary); text-transform: uppercase;">Sensor ID</th>
+                        <th style="padding: 16px 24px; font-size: 11px; font-weight: 800; color: var(--text-secondary); text-transform: uppercase;">Source Origin</th>
+                        <th style="padding: 16px 24px; font-size: 11px; font-weight: 800; color: var(--text-secondary); text-transform: uppercase;">Operational Status</th>
+                        <th style="padding: 16px 24px; font-size: 11px; font-weight: 800; color: var(--text-secondary); text-transform: uppercase; text-align: right;">Management</th>
+                    </tr>
+                </thead>
+                <tbody id="camera-list-body">
+                    <tr><td colspan="4" style="text-align: center; padding: 100px; color: var(--text-secondary); opacity: 0.5;">Querying sensor matrix...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Right: Information Panel -->
+        <div class="card" style="padding: 32px; background: var(--bg-sidebar);">
+            <div style="width: 48px; height: 48px; background: rgba(16, 163, 127, 0.1); border-radius: 12px; display: flex; align-items: center; justify-content: center; margin-bottom: 24px;">
+                <i class="fa-solid fa-tower-broadcast" style="color: var(--accent); font-size: 20px;"></i>
+            </div>
+            <h3 style="font-size: 18px; font-weight: 800; margin-bottom: 12px;">Sensor Protocol</h3>
+            <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.6; margin-bottom: 24px;">
+                Add RTSP streams, local webcams, or static video files as capture nodes. Ensure each sensor has a unique identifier for temporal tracking.
+            </p>
+            <div style="padding: 16px; background: rgba(255,255,255,0.03); border-radius: 12px; border: 1px solid var(--border-color);">
+                <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 12px;">
+                    <i class="fa-solid fa-circle-check" style="color: #27ae60; font-size: 14px;"></i>
+                    <span style="font-size: 12px; font-weight: 700;">H.264 / H.265 Optimized</span>
+                </div>
+                <div style="display: flex; gap: 12px; align-items: center;">
+                    <i class="fa-solid fa-circle-check" style="color: #27ae60; font-size: 14px;"></i>
+                    <span style="font-size: 12px; font-weight: 700;">Low Latency Neural Bus</span>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
-<script src="/static/skeleton.js"></script>
-<script>
-function toggleTheme(){
-  const t=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';
-  document.documentElement.setAttribute('data-theme',t);
-  localStorage.setItem('theme',t);
-}
+<!-- Edit Sensor Overlay -->
+<div id="editModal" class="modal-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 9999; align-items: center; justify-content: center; backdrop-filter: blur(20px);">
+    <div class="card" style="width: 440px; padding: 32px; animation: modalScale 0.3s cubic-bezier(0.4, 0, 0.2, 1);">
+        <h3 style="font-size: 20px; font-weight: 800; margin-bottom: 24px; display: flex; align-items: center; gap: 12px;">
+            <i class="fa-solid fa-pen-to-square" style="color: var(--accent);"></i> Reconfigure Sensor
+        </h3>
+        <form id="edit-camera-form">
+            <input type="hidden" id="edit-id-hidden" name="camera_id">
+            <div class="input-group" style="margin-bottom: 32px;">
+                <label style="font-size: 11px; font-weight: 800; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 8px; display: block;">Sensor Source Path</label>
+                <input type="text" id="edit-source-input" name="source" class="search-input" required>
+            </div>
+            <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                <button type="button" class="btn" onclick="closeEditModal()">DISCARD</button>
+                <button type="submit" class="btn btn-primary">SAVE CONFIG</button>
+            </div>
+        </form>
+    </div>
+</div>
 
-const HINTS={
-  webcam:'Enter webcam index (0 for default camera)',
-  rtsp:'rtsp://user:pass@192.168.1.100:554/stream',
-  ipwebcam:'192.168.1.100:8080  (IP Webcam app)',
-  droidcam:'192.168.1.100  (DroidCam app)',
-  mjpeg:'http://192.168.1.100/video.mjpg'
-};
-const PLACEHOLDERS={
-  webcam:'0',rtsp:'rtsp://user:pass@ip:554/stream',
-  ipwebcam:'192.168.1.100:8080',droidcam:'192.168.1.100',
-  mjpeg:'http://ip/video.mjpg'
-};
-function updateSourceHint(){
-  const t=document.getElementById('cam-type').value;
-  document.getElementById('source-hint').textContent=HINTS[t]||'';
-  document.getElementById('cam-source').placeholder=PLACEHOLDERS[t]||'';
-}
-
-// Clock
-let _off=0;
-async function syncClock(){
-  try{const t0=Date.now();const r=await fetch('/api/server_time');if(r.ok){const d=await r.json();_off=d.timestamp_ms-t0;}}catch(e){}
-}
-function tickClock(){
-  const now=new Date(Date.now()+_off);
-  const s=now.toLocaleString('en-IN',{timeZone:'Asia/Kolkata',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true});
-  document.getElementById('live-clock').textContent=s+' IST';
-}
-
-// Load cameras
-async function loadCameras(){
-  try{
-    const res=await fetch('/api/cameras');
-    const cams=await res.json();
-    const tbody=document.getElementById('camera-list');
-    document.getElementById('cam-count').textContent=cams.length+' connected';
-    if(!cams.length){
-      tbody.innerHTML='<tr><td colspan="5" style="text-align:center;padding:30px;color:var(--text-secondary);">No cameras connected. Add one →</td></tr>';
-      return;
-    }
-    tbody.innerHTML=cams.map(c=>`
-      <tr>
-        <td style="font-weight:600;">${c.id}</td>
-        <td style="font-size:12px;color:var(--text-secondary);max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${c.source}">${c.source||'—'}</td>
-        <td><span class="status-online">● Online</span></td>
-        <td style="display:flex;gap:6px;flex-wrap:wrap;">
-          <button class="btn btn-edit" onclick="openEditModal('${c.id}', '${c.source}')">Edit</button>
-          <button class="btn" onclick="viewLogs('${c.id}')">Logs</button>
-          <button class="btn btn-danger" onclick="removeCamera('${c.id}')">Remove</button>
-        </td>
-      </tr>`).join('');
-  }catch(e){}
-}
-
-function openEditModal(id, source){
-    document.getElementById('edit-camera-id').value = id;
-    document.getElementById('display-camera-id').value = id;
-    document.getElementById('edit-source').value = source;
-    document.getElementById('editModal').style.display = 'block';
-}
-
-function closeEditModal(){
-    document.getElementById('editModal').style.display = 'none';
-}
-
-document.getElementById('edit-form').addEventListener('submit', async e => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    const data = Object.fromEntries(fd);
+<style>
+    @keyframes modalScale { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
     
-    try {
-        const res = await fetch('/api/update_camera', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(data)
-        });
-        const result = await res.json();
-        if(result.status === 'success'){
-            closeEditModal();
-            loadCameras();
-        } else {
-            alert('Error: ' + result.message);
-        }
-    } catch(err) {
-        alert('Update failed: ' + err.message);
+    td { padding: 16px 24px; border-bottom: 1px solid var(--border-color); font-size: 14px; }
+    
+    .status-glow { width: 8px; height: 8px; border-radius: 50%; background: #27ae60; display: inline-block; margin-right: 8px; box-shadow: 0 0 10px #27ae60; }
+    
+    .manage-btn {
+        padding: 8px 12px;
+        border-radius: 8px;
+        border: 1px solid var(--border-color);
+        background: transparent;
+        color: var(--text-primary);
+        cursor: pointer;
+        font-size: 12px;
+        transition: var(--transition);
     }
-});
+    .manage-btn:hover { background: var(--bg-secondary); border-color: var(--text-secondary); }
+    .manage-btn.danger:hover { color: #fff; background: #c41e3a; border-color: #c41e3a; }
 
-async function removeCamera(id){
-  if(!confirm(`Remove camera "${id}"?`))return;
-  await fetch(`/api/remove_camera/${id}`,{method:'DELETE'});
-  loadCameras();
-}
+    .search-input { width: 100%; padding: 12px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; color: #fff; font-size: 14px; outline: none; }
+</style>
 
-function viewLogs(id){location.href=`/detection_logs?camera_id=${id}`;}
+<script>
+    document.getElementById('page-title').textContent = 'Sensor Matrix Management';
 
+    async function loadCameras() {
+        try {
+            const res = await fetch('/api/cameras');
+            const cams = await res.json();
+            const tbody = document.getElementById('camera-list-body');
+            document.getElementById('cam-count-display').textContent = `${cams.length} CONNECTED`;
+            
+            if(!cams.length) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 100px; color: var(--text-secondary); opacity: 0.5;">No active sensors detected in the local matrix.</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = cams.map(c => `
+                <tr>
+                    <td style="font-weight: 700; font-size: 15px;">${c.id}</td>
+                    <td style="font-family: monospace; font-size: 12px; color: var(--text-secondary);">${c.source || 'INTERNAL'}</td>
+                    <td>
+                        <div style="display: flex; align-items: center; color: #27ae60; font-weight: 700; font-size: 12px; text-transform: uppercase;">
+                            <span class="status-glow"></span> OPERATIONAL
+                        </div>
+                    </td>
+                    <td style="text-align: right;">
+                        <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                            <button class="manage-btn" onclick="openEditModal('${c.id}', '${c.source}')">
+                                <i class="fa-solid fa-sliders"></i>
+                            </button>
+                            <button class="manage-btn danger" onclick="removeCamera('${c.id}')">
+                                <i class="fa-solid fa-trash-can"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+        } catch(e) {}
+    }
 
-// Nav active
-function setActiveNav(){
-  const map={'/':'nav-live','/dashboard':'nav-dashboard','/recordings_page':'nav-recordings','/detection_logs':'nav-logs','/people':'nav-people','/search':'nav-search','/journey':'nav-journey','/analytics':'nav-analytics','/registered_detections':'nav-reg-logs','/cameras':'nav-cameras'};
-  const id=map[location.pathname];
-  if(id)document.getElementById(id)?.classList.add('active');
-}
+    function openEditModal(id, source) {
+        document.getElementById('edit-id-hidden').value = id;
+        document.getElementById('edit-source-input').value = source;
+        document.getElementById('editModal').style.display = 'flex';
+    }
 
-document.addEventListener('DOMContentLoaded',()=>{
-  document.getElementById('theme-checkbox').checked=(localStorage.getItem('theme')||'light')==='dark';
-  syncClock().then(()=>{tickClock();setInterval(tickClock,1000);setInterval(syncClock,300000);});
-  loadCameras();
-  setActiveNav();
-  updateSourceHint();
-  setInterval(loadCameras,15000);
-});
+    function closeEditModal() {
+        document.getElementById('editModal').style.display = 'none';
+    }
+
+    document.getElementById('edit-camera-form').addEventListener('submit', async e => {
+        e.preventDefault();
+        const data = Object.fromEntries(new FormData(e.target));
+        try {
+            const res = await fetch(`/api/cameras/${data.camera_id}`, {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({id: data.camera_id, source: data.source, name: data.camera_id})
+            });
+            if(res.ok) {
+                closeEditModal();
+                loadCameras();
+            }
+        } catch(e) {}
+    });
+
+    async function removeCamera(id) {
+        if(!confirm(`Archive sensor "${id}" and disconnect from matrix? Historical logs will persist.`)) return;
+        try {
+            const res = await fetch(`/api/cameras/${id}`, { method: 'DELETE' });
+            if(res.ok) loadCameras();
+        } catch(e) {}
+    }
+
+    loadCameras();
 </script>
-</body>
-</html>
+{% endblock %}

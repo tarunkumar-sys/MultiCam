@@ -1,663 +1,237 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Vigilance - Forensic Search</title>
-    <!-- FontAwesome for Premium Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        :root {
-            --bg-primary: #f0f0f0;
-            --bg-secondary: #f4f5f7;
-            --bg-panel: #ffffff;
-            --text-primary: #333333;
-            --text-secondary: #666666;
-            --border-color: #dddddd;
-            --sidebar-bg: #2d2d2d;
-            --sidebar-active: #3a3a3a;
-            --accent: #c41e3a;
-            --accent-hover: #a01830;
-            --shadow: 0 2px 10px rgba(0,0,0,0.05);
-            --cyan: #00bcd4;
-        }
+{% extends base_template %}
 
-        [data-theme="dark"] {
-            --bg-primary: #121212;
-            --bg-secondary: #1e1e1e;
-            --bg-panel: #252525;
-            --text-primary: #e0e0e0;
-            --text-secondary: #aaaaaa;
-            --border-color: #333333;
-            --sidebar-bg: #1a1a1a;
-            --sidebar-active: #2d2d2d;
-            --shadow: 0 4px 20px rgba(0,0,0,0.4);
-        }
-
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
-            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            background: var(--bg-primary); 
-            color: var(--text-primary);
-            height: 100vh;
-            overflow: hidden;
-            display: flex;
-            transition: background 0.3s, color 0.3s;
-        }
-
-        /* Layout */
-        .app-container { display: flex; width: 100%; height: 100vh; }
-        
-        /* Sidebar */
-        .sidebar {
-            width: 260px;
-            background: var(--sidebar-bg);
-            border-right: 1px solid var(--border-color);
-            display: flex;
-            flex-direction: column;
-            z-index: 100;
-            overflow-y: auto;
-        }
-        .sidebar-header {
-            padding: 20px;
-            background: var(--accent);
-            color: #fff;
-            font-size: 18px;
-            font-weight: 800;
-            letter-spacing: 1px;
-            text-align: center;
-        }
-        .sidebar-info {
-            padding: 20px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            background: rgba(0,0,0,0.05);
-            border-bottom: 1px solid rgba(255,255,255,0.05);
-        }
-        .user-avatar {
-            width: 40px; height: 40px;
-            background: var(--accent);
-            border-radius: 10px;
-            display: flex; align-items: center; justify-content: center;
-            color: #fff; font-weight: bold; font-size: 18px;
-        }
-        .user-details { overflow: hidden; }
-        .user-name { font-size: 14px; font-weight: 600; color: #fff; }
-        .user-role { font-size: 11px; color: #aaa; text-transform: uppercase; }
-
-        .sidebar-section { border-bottom: 1px solid rgba(255,255,255,0.05); }
-        .sidebar-title {
-            padding: 15px 20px 8px 20px;
-            color: #888;
-            font-size: 11px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            font-weight: 700;
-        }
-        .sidebar-menu { list-style: none; padding-bottom: 10px; }
-        .sidebar-menu li a {
-            display: flex;
-            align-items: center;
-            padding: 12px 20px;
-            color: #bbb;
-            text-decoration: none;
-            font-size: 13px;
-            transition: all 0.2s;
-            border-left: 4px solid transparent;
-        }
-        .sidebar-menu li a:hover { background: rgba(255,255,255,0.05); color: #fff; }
-        .sidebar-menu li a.active {
-            background: rgba(196, 30, 58, 0.1);
-            color: #fff;
-            border-left-color: var(--accent);
-            font-weight: 600;
-        }
-        .sidebar-footer {
-            margin-top: auto;
-            padding: 20px;
-            background: rgba(0,0,0,0.1);
-            border-top: 1px solid rgba(255,255,255,0.05);
-        }
-        .theme-toggle-container {
-            display: flex; align-items: center; justify-content: space-between;
-            margin-bottom: 15px;
-        }
-        .theme-label { color: #888; font-size: 12px; }
-        .logout-btn-side {
-            width: 100%;
-            padding: 10px;
-            background: rgba(255,255,255,0.05);
-            border: 1px solid rgba(255,255,255,0.1);
-            color: #ef4444;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 12px;
-            display: flex; align-items: center; justify-content: center; gap: 8px;
-        }
-
-        /* Main Content */
-        .main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--bg-secondary); }
-        .toolbar {
-            padding: 16px 32px;
-            background: var(--bg-panel);
-            border-bottom: 1px solid var(--border-color);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            box-shadow: var(--shadow);
-            z-index: 10;
-        }
-        .toolbar-title { font-size: 1.2rem; font-weight: 700; color: var(--text-primary); }
-        .content-scroll { flex: 1; padding: 32px; overflow-y: auto; }
-
-        /* Premium Search Tabs */
-        .search-tab-container {
-            display: flex;
-            gap: 12px;
-            margin-bottom: 24px;
-        }
-        .search-tab {
-            padding: 12px 24px;
-            background: var(--bg-panel);
-            border: 1px solid var(--border-color);
-            border-radius: 10px;
-            color: var(--text-secondary);
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            box-shadow: var(--shadow);
-        }
-        .search-tab:hover { transform: translateY(-2px); color: var(--text-primary); }
-        .search-tab.active {
-            background: var(--accent);
-            color: #fff;
-            border-color: var(--accent);
-        }
-
-        .tab-content { display: none; animation: slideIn 0.4s ease-out; }
-        .tab-content.active { display: block; }
-        @keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-
-        /* Panels */
-        .section-panel {
-            background: var(--bg-panel);
-            border-radius: 12px;
-            border: 1px solid var(--border-color);
-            padding: 24px;
-            margin-bottom: 24px;
-            box-shadow: var(--shadow);
-        }
-        .section-panel h3 { margin-bottom: 20px; font-size: 1rem; color: var(--text-primary); display: flex; align-items: center; gap: 10px; }
-
-        .search-grid-form {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            align-items: flex-end;
-        }
-        .form-group { display: flex; flex-direction: column; gap: 8px; }
-        .form-group label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--text-secondary); }
-        .search-input, .search-file-input {
-            padding: 12px;
-            border-radius: 8px;
-            border: 1px solid var(--border-color);
-            background: var(--bg-secondary);
-            color: var(--text-primary);
-            font-size: 0.9rem;
-            outline: none;
-        }
-        .search-input:focus { border-color: var(--accent); }
-
-        .btn {
-            padding: 12px 24px;
-            border-radius: 8px;
-            border: none;
-            font-weight: 700;
-            cursor: pointer;
-            transition: all 0.2s;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            font-size: 0.9rem;
-        }
-        .btn-accent { background: var(--accent); color: #fff; }
-        .btn-accent:hover { background: var(--accent-hover); transform: scale(1.02); }
-        .btn-outline { background: transparent; border: 1px solid var(--border-color); color: var(--text-primary); }
-        .w-full { width: 100%; }
-
-        /* Results Grid */
-        .results-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-            gap: 20px;
-        }
-        .detection-card {
-            background: var(--bg-panel);
-            border-radius: 12px;
-            border: 1px solid var(--border-color);
-            overflow: hidden;
-            transition: all 0.3s;
-            box-shadow: var(--shadow);
-            cursor: pointer;
-        }
-        .detection-card:hover { transform: translateY(-5px); border-color: var(--accent); }
-        .detection-image { width: 100%; height: 160px; object-fit: cover; background: #000; border-bottom: 1px solid var(--border-color); }
-        .detection-info { padding: 15px; }
-        .detection-info h4 { font-size: 1rem; font-weight: 700; margin-bottom: 8px; }
-        .detection-icon-text { font-size: 0.85rem; color: var(--text-secondary); display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
-        .detection-icon-sm { font-size: 0.75rem; color: var(--accent); opacity: 0.8; }
-
-        /* Video Selection */
-        .vid-scroll-area { max-height: 250px; overflow-y: auto; background: var(--bg-secondary); border-radius: 8px; padding: 10px; border: 1px solid var(--border-color); margin-bottom: 16px; }
-        .vid-select-label {
-            display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: 6px; cursor: pointer; transition: background 0.2s; border-bottom: 1px solid var(--border-color);
-        }
-        .vid-select-label:hover { background: rgba(0,0,0,0.03); }
-        .vid-select-label input { width: 18px; height: 18px; accent-color: var(--accent); }
-        .vid-select-label span { font-size: 0.85rem; }
-
-        .empty-state {
-            grid-column: 1 / -1;
-            padding: 60px;
-            text-align: center;
-            background: var(--bg-panel);
-            border: 2px dashed var(--border-color);
-            border-radius: 16px;
-            color: var(--text-secondary);
-        }
-        .empty-state i { font-size: 3rem; margin-bottom: 20px; opacity: 0.3; }
-
-        .settings-msg { margin-top: 10px; font-size: 0.85rem; font-weight: 600; }
-
-        /* Toast notifications */
-        .toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 10000; display: flex; flex-direction: column; gap: 10px; }
-        .toast { background: var(--bg-panel); border: 1px solid var(--border-color); padding: 12px 20px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); transform: translateX(400px); transition: transform 0.3s; display: flex; align-items: center; gap: 10px; }
-        .toast.active { transform: translateX(0); }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 10px; }
-        [data-theme='dark'] ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); }
-    </style>
-</head>
-<body>
-    <div class="app-container">
-        <!-- Sidebar -->
-        <aside class="sidebar">
-            <div class="sidebar-header">AI VIGILANCE</div>
-            <div class="sidebar-info">
-                <div class="user-avatar">AD</div>
-                <div class="user-details">
-                    <div class="user-name">Forensic Unit</div>
-                    <div class="user-role">Lead Investigator</div>
-                </div>
-            </div>
-
-            <div class="sidebar-section">
-                <div class="sidebar-title">Monitoring</div>
-                <ul class="sidebar-menu">
-                    <li><a href="/"><i class="fa-solid fa-house"></i> Live Stream</a></li>
-                    <li><a href="/dashboard"><i class="fa-solid fa-gauge-high"></i> Dashboard</a></li>
-                    <li><a href="/recordings_page"><i class="fa-solid fa-video"></i> Recordings</a></li>
-                    <li><a href="/detection_logs"><i class="fa-solid fa-list-ul"></i> Detection Logs</a></li>
-                </ul>
-            </div>
-            <div class="sidebar-section">
-                <div class="sidebar-title">Analytics</div>
-                <ul class="sidebar-menu">
-                    <li><a href="/people"><i class="fa-solid fa-user-group"></i> People Registry</a></li>
-                    <li><a href="/search" class="active"><i class="fa-solid fa-magnifying-glass"></i> Search Forensic</a></li>
-                    <li><a href="/journey"><i class="fa-solid fa-route"></i> Journey Tracker</a></li>
-                    <li><a href="/analytics"><i class="fa-solid fa-chart-line"></i> Analytics</a></li>
-                </ul>
-            </div>
-            
-            <div class="sidebar-footer">
-                <button class="logout-btn-side" onclick="location.href='/logout'">
-                    <i class="fa-solid fa-right-from-bracket"></i> Logout
-                </button>
-            </div>
-        </aside>
-
-        <!-- Main Content -->
-        <main class="main-content">
-            <header class="toolbar">
-                <h1 class="toolbar-title">Search & Forensics</h1>
-                <div id="live-clock" style="font-weight: 600; color: var(--text-secondary); font-size: 0.9rem;"></div>
-            </header>
-
-            <div class="content-scroll">
-                <!-- Search Tabs -->
-                <div class="search-tab-container">
-                    <button class="search-tab active" onclick="switchTab('db-search-tab', this)">
-                        <i class="fa-solid fa-database"></i> Database Search
-                    </button>
-                    <button class="search-tab" onclick="switchTab('img-search-tab', this)">
-                        <i class="fa-solid fa-face-viewfinder"></i> Visual Match
-                    </button>
-                    <button class="search-tab" onclick="switchTab('vid-search-tab', this)">
-                        <i class="fa-solid fa-clapperboard"></i> Video Forensic Scan
-                    </button>
-                </div>
-
-                <!-- Tab 1: Database Search -->
-                <div id="db-search-tab" class="tab-content active">
-                    <div class="section-panel">
-                        <h3><i class="fa-solid fa-filter" style="color:var(--accent)"></i> Query Parameters</h3>
-                        <div class="search-grid-form">
-                            <div class="form-group">
-                                <label>Person Name</label>
-                                <input type="text" id="s-name" placeholder="Name or 'Unknown'" class="search-input">
-                            </div>
-                            <div class="form-group">
-                                <label>Start Date</label>
-                                <input type="datetime-local" id="s-start" class="search-input">
-                            </div>
-                            <div class="form-group">
-                                <label>End Date</label>
-                                <input type="datetime-local" id="s-end" class="search-input">
-                            </div>
-                            <div style="display:flex; gap:10px;">
-                                <button class="btn btn-accent" onclick="searchDetections()">
-                                    <i class="fa-solid fa-magnifying-glass"></i> Run Query
-                                </button>
-                                <button class="btn btn-outline" onclick="clearHistory()">
-                                    <i class="fa-solid fa-trash-can"></i> Clear All
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                    <div id="results-grid" class="results-grid">
-                        <div class="empty-state">
-                            <i class="fa-solid fa-magnifying-glass"></i>
-                            <p>Apply filters and run query to see results</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Tab 2: Image Search -->
-                <div id="img-search-tab" class="tab-content">
-                    <div class="section-panel">
-                        <h3><i class="fa-solid fa-image" style="color:var(--cyan)"></i> Find Person by Photo</h3>
-                        <p style="margin-bottom:20px; font-size:0.9rem; opacity:0.7;">Upload a clear face photo. The system will bridge your photo to the known identity and find all historical occurrences.</p>
-                        <div class="search-grid-form">
-                            <div class="form-group">
-                                <label>Target Image</label>
-                                <input type="file" id="search-image" accept="image/*" class="search-file-input">
-                            </div>
-                            <button class="btn btn-accent" onclick="searchByImage()">
-                                <i class="fa-solid fa-wand-magic-sparkles"></i> Analyze & Match
-                            </button>
-                        </div>
-                        <div id="img-search-msg" class="settings-msg"></div>
-                    </div>
-                    <div id="img-results-grid" class="results-grid"></div>
-                </div>
-
-                <!-- Tab 3: Video Full Scan -->
-                <div id="vid-search-tab" class="tab-content">
-                    <div class="section-panel">
-                        <h3><i class="fa-solid fa-list-check"></i> Step 1: Select Recordings to Scan</h3>
-                        <div class="vid-scroll-area">
-                            <div id="vid-select-list">
-                                <p style="opacity:.5; padding:10px;">Loading historical recordings...</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:24px;">
-                        <div class="section-panel">
-                            <h3><i class="fa-solid fa-user-tag" style="color:var(--accent)"></i> Option A: Scan by Name</h3>
-                            <input type="text" id="v-name" placeholder="Enter registered name" class="search-input w-full" style="margin-bottom:16px;">
-                            <button class="btn btn-accent w-full" onclick="vidSearchByName()" id="vid-name-btn">
-                                <i class="fa-solid fa-magnifying-glass"></i> Start Deep Scan
-                            </button>
-                            <div id="v-name-msg" class="settings-msg"></div>
-                        </div>
-                        <div class="section-panel">
-                            <h3><i class="fa-solid fa-face-smile-wink" style="color:var(--cyan)"></i> Option B: Scan by Image</h3>
-                            <input type="file" id="v-image" accept="image/*" class="search-file-input w-full" style="margin-bottom:16px;">
-                            <button class="btn btn-accent w-full" onclick="vidSearchByImg()" id="vid-img-btn">
-                                <i class="fa-solid fa-magnifying-glass"></i> Start Deep Scan
-                            </button>
-                            <div id="v-img-msg" class="settings-msg"></div>
-                        </div>
-                    </div>
-
-                    <div id="vid-results" style="margin-top:24px;"></div>
-                </div>
-            </div>
-        </main>
+{% block content %}
+<div class="search-wrapper" style="padding: 32px; height: 100%; overflow-y: auto;">
+    <div class="header-section" style="margin-bottom: 32px;">
+        <h2 style="font-size: 28px; font-weight: 800; letter-spacing: -0.5px;">Forensic Search</h2>
+        <p style="color: var(--text-secondary); font-size: 14px;">Query the global intelligence database for historical occurrences and visual matches.</p>
     </div>
 
-    <!-- Toast UI -->
-    <div class="toast-container" id="toast-container"></div>
+    <!-- Interface Mode Tabs -->
+    <div class="interface-tabs" style="display: flex; gap: 8px; margin-bottom: 32px; background: var(--bg-sidebar); padding: 6px; border-radius: 12px; width: fit-content; border: 1px solid var(--border-color);">
+        <button class="i-tab active" onclick="switchMode('db', this)">
+            <i class="fa-solid fa-database"></i> Neural Database
+        </button>
+        <button class="i-tab" onclick="switchMode('visual', this)">
+            <i class="fa-solid fa-face-viewfinder"></i> Biometric Match
+        </button>
+        <button class="i-tab" onclick="switchMode('video', this)">
+            <i class="fa-solid fa-microchip"></i> Video Forensic Scan
+        </button>
+    </div>
 
-    <script>
-        // Theme Sync
-        (function() {
-            const theme = localStorage.getItem('theme') || 'light';
-            document.documentElement.setAttribute('data-theme', theme);
-        })();
+    <!-- Mode: Neural Database -->
+    <div id="mode-db" class="mode-content active">
+        <div class="card" style="padding: 24px; margin-bottom: 32px;">
+            <div class="query-form" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 24px; align-items: flex-end;">
+                <div class="input-group">
+                    <label>Target Identity</label>
+                    <input type="text" id="s-name" placeholder="Name or 'Unknown'" class="search-input">
+                </div>
+                <div class="input-group">
+                    <label>Start Interval</label>
+                    <input type="datetime-local" id="s-start" class="search-input">
+                </div>
+                <div class="input-group">
+                    <label>End Interval</label>
+                    <input type="datetime-local" id="s-end" class="search-input">
+                </div>
+                <div style="display: flex; gap: 12px;">
+                    <button class="btn btn-primary" style="flex: 1;" onclick="runNeuralQuery()">
+                        <i class="fa-solid fa-magnifying-glass"></i> RUN QUERY
+                    </button>
+                    <button class="btn" style="width: 44px; padding: 0;" onclick="clearForm()" title="Reset">
+                        <i class="fa-solid fa-rotate-left"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
 
-        // Clock
-        function updateClock() {
-            const now = new Date();
-            document.getElementById('live-clock').innerText = now.toLocaleString('en-IN', {
-                timeZone: 'Asia/Kolkata', hour12: true, month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit'
-            }) + ' IST';
+        <div id="neural-results" class="results-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 24px;">
+            <div class="empty-state">
+                <i class="fa-solid fa-inbox"></i>
+                <p>Configure neural parameters to begin forensic analysis.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mode: Biometric Match -->
+    <div id="mode-visual" class="mode-content">
+        <div class="card" style="padding: 40px; text-align: center; border-style: dashed; background: transparent;">
+            <i class="fa-solid fa-cloud-arrow-up" style="font-size: 48px; color: var(--accent); margin-bottom: 20px;"></i>
+            <h3>Visual Intelligence Probe</h3>
+            <p style="color: var(--text-secondary); margin-bottom: 32px;">Upload a high-fidelity face image to cross-reference with the global history.</p>
+            
+            <input type="file" id="visual-probe-file" style="display: none;" onchange="handleVisualProbe(this)">
+            <button class="btn btn-primary" onclick="document.getElementById('visual-probe-file').click()">
+                <i class="fa-solid fa-upload"></i> SELECT SOURCE IMAGE
+            </button>
+        </div>
+        <div id="visual-results" class="results-grid" style="margin-top: 32px;"></div>
+    </div>
+
+    <!-- Mode: Video Forensic -->
+    <div id="mode-video" class="mode-content">
+        <div class="card" style="padding: 24px; margin-bottom: 32px;">
+            <h4 style="margin-bottom: 20px;">Step 1: Select Vault Evidence</h4>
+            <div id="vault-list" style="max-height: 300px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-sidebar);">
+                <div style="padding: 40px; text-align: center; opacity: 0.5;">Accessing evidence vault...</div>
+            </div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+            <div class="card" style="padding: 24px;">
+                <h4 style="margin-bottom: 16px;">Neural Search</h4>
+                <input type="text" id="v-name" placeholder="Identity name" class="search-input" style="width: 100%; margin-bottom: 16px;">
+                <button class="btn btn-primary" style="width: 100%;" onclick="startDeepScan('name')">EXECUTE DEEP SCAN</button>
+            </div>
+            <div class="card" style="padding: 24px;">
+                <h4 style="margin-bottom: 16px;">Biometric Scan</h4>
+                <button class="btn" style="width: 100%;" onclick="document.getElementById('v-image-file').click()">
+                    <i class="fa-solid fa-image"></i> ATTACH REFERENCE
+                </button>
+                <input type="file" id="v-image-file" style="display: none;">
+                <button class="btn btn-primary" style="width: 100%; margin-top: 12px;" onclick="startDeepScan('image')">EXECUTE DEEP SCAN</button>
+            </div>
+        </div>
+        <div id="deep-scan-results" style="margin-top: 32px;"></div>
+    </div>
+</div>
+
+<style>
+    .i-tab {
+        padding: 10px 20px;
+        border: none;
+        background: transparent;
+        color: var(--text-secondary);
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+        border-radius: 8px;
+        transition: var(--transition);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .i-tab:hover { color: var(--text-primary); }
+    .i-tab.active { background: var(--bg-panel); color: var(--accent); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+
+    .mode-content { display: none; }
+    .mode-content.active { display: block; animation: fadeIn 0.4s ease-out; }
+
+    .input-group label { font-size: 11px; font-weight: 800; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 8px; display: block; letter-spacing: 0.5px; }
+    .search-input { width: 100%; padding: 12px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; color: #fff; font-size: 14px; outline: none; }
+    .search-input:focus { border-color: var(--accent); }
+
+    .result-card {
+        background: var(--bg-panel);
+        border: 1px solid var(--border-color);
+        border-radius: 16px;
+        overflow: hidden;
+        transition: var(--transition);
+    }
+
+    .result-card:hover { border-color: var(--accent); transform: scale(1.02); }
+
+    .result-img { width: 100%; aspect-ratio: 4/3; object-fit: cover; }
+    .result-info { padding: 16px; }
+    .result-title { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+    .result-meta { font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 8px; }
+
+    .empty-state {
+        grid-column: 1/-1;
+        padding: 100px 20px;
+        text-align: center;
+        color: var(--text-secondary);
+        opacity: 0.5;
+    }
+    .empty-state i { font-size: 48px; margin-bottom: 16px; }
+
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+</style>
+
+<script>
+    document.getElementById('page-title').textContent = 'Forensic Intelligence Search';
+
+    function switchMode(mode, btn) {
+        document.querySelectorAll('.i-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.mode-content').forEach(c => c.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById(`mode-${mode}`).classList.add('active');
+        if(mode === 'video') loadVault();
+    }
+
+    async function runNeuralQuery() {
+        const name = document.getElementById('s-name').value;
+        const start = document.getElementById('s-start').value;
+        const end = document.getElementById('s-end').value;
+        const grid = document.getElementById('neural-results');
+        
+        grid.innerHTML = '<div class="empty-state"><i class="fa-solid fa-microchip fa-spin"></i><p>Cross-referencing forensic database...</p></div>';
+        
+        try {
+            const res = await fetch(`/api/search?name=${name}&start_time=${start}&end_time=${end}`);
+            const data = await res.json();
+            renderResults(data, 'neural-results');
+        } catch(e) { grid.innerHTML = '<div class="empty-state">Query failed</div>'; }
+    }
+
+    function renderResults(data, gridId) {
+        const grid = document.getElementById(gridId);
+        if(!data || !data.length) {
+            grid.innerHTML = '<div class="empty-state"><i class="fa-solid fa-database"></i><p>No matching occurrences found in historical logs.</p></div>';
+            return;
         }
-        setInterval(updateClock, 1000);
-        updateClock();
-
-        // Tabs
-        function switchTab(id, btn) {
-            document.querySelectorAll('.search-tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            btn.classList.add('active');
-            document.getElementById(id).classList.add('active');
-            if(id === 'vid-search-tab') loadVidOptions();
-        }
-
-        // --- TAB 1: DB SEARCH ---
-        async function searchDetections() {
-            const name = document.getElementById('s-name').value;
-            const start = document.getElementById('s-start').value;
-            const end = document.getElementById('s-end').value;
-            const grid = document.getElementById('results-grid');
-
-            grid.innerHTML = '<div class="empty-state"><i class="fa-solid fa-circle-notch fa-spin"></i><p>Querying Forensic Database...</p></div>';
-
-            try {
-                let url = `/api/search?`;
-                if(name) url += `name=${encodeURIComponent(name)}&`;
-                if(start) url += `start_time=${encodeURIComponent(start)}&`;
-                if(end) url += `end_time=${encodeURIComponent(end)}&`;
-
-                const res = await fetch(url);
-                const data = await res.json();
-                renderResults(data, 'results-grid');
-            } catch(e) {
-                grid.innerHTML = `<div class="empty-state"><p>Error: ${e.message}</p></div>`;
-            }
-        }
-
-        function renderResults(data, gridId) {
-            const grid = document.getElementById(gridId);
-            if(!data || data.length === 0) {
-                grid.innerHTML = '<div class="empty-state"><i class="fa-solid fa-magnifying-glass-slash"></i><p>No matches found in the specified range.</p></div>';
-                return;
-            }
-
-            grid.innerHTML = data.map(r => `
-                <div class="detection-card animate-in">
-                    <img src="/api/snapshot_image?path=${encodeURIComponent(r.image_path)}" class="detection-image" onerror="this.src='https://via.placeholder.com/300x200?text=No+Preview'">
-                    <div class="detection-info">
-                        <h4>${r.person_name}</h4>
-                        <p class="detection-icon-text"><i class="fa-solid fa-video detection-icon-sm"></i> ${r.camera_id}</p>
-                        <p class="detection-icon-text"><i class="fa-regular fa-clock detection-icon-sm"></i> ${formatTime(r.timestamp)}</p>
+        grid.innerHTML = data.map(r => `
+            <div class="result-card">
+                <img src="/api/snapshot_image?path=${encodeURIComponent(r.image_path)}" class="result-img" onerror="this.src='https://ui-avatars.com/api/?name=?&background=333&color=fff'">
+                <div class="result-info">
+                    <div class="result-title">${r.person_name}</div>
+                    <div class="result-meta">
+                        <i class="fa-solid fa-video"></i> ${r.camera_id}
+                        <span style="opacity:0.3">•</span>
+                        <i class="fa-solid fa-clock"></i> ${new Date(r.timestamp).toLocaleString()}
                     </div>
                 </div>
+            </div>
+        `).join('');
+    }
+
+    async function loadVault() {
+        const list = document.getElementById('vault-list');
+        try {
+            const res = await fetch('/api/recordings');
+            const data = await res.json();
+            if(!data.length) {
+                list.innerHTML = '<div style="padding:40px; text-align:center; opacity:0.5;">Evidence vault is empty.</div>';
+                return;
+            }
+            list.innerHTML = data.map(v => `
+                <label style="display:flex; align-items:center; gap:16px; padding:12px 20px; border-bottom:1px solid var(--border-color); cursor:pointer; transition:background 0.2s;">
+                    <input type="checkbox" name="vids" value="${v.id}" style="width:18px; height:18px; accent-color:var(--accent);">
+                    <div style="flex:1;">
+                        <div style="font-size:14px; font-weight:700;">${v.camera_id}</div>
+                        <div style="font-size:11px; color:var(--text-secondary);">${v.start_time}</div>
+                    </div>
+                    <i class="fa-solid fa-file-video" style="opacity:0.3;"></i>
+                </label>
             `).join('');
-        }
+        } catch(e) {}
+    }
 
-        function formatTime(ts) {
-            return new Date(ts).toLocaleString();
-        }
-
-        async function clearHistory() {
-            if(!confirm("Are you sure you want to WIPE all forensic logs? This is permanent.")) return;
-            await fetch('/clear_history', {method: 'POST'});
-            searchDetections();
-        }
-
-        // --- TAB 2: IMAGE SEARCH ---
-        async function searchByImage() {
-            const file = document.getElementById('search-image').files[0];
-            const msg = document.getElementById('img-search-msg');
-            const grid = document.getElementById('img-results-grid');
-
-            if(!file) { msg.innerText = "Please select an image first."; return; }
-            msg.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Cross-referencing visual features...';
-            grid.innerHTML = '';
-
-            const fd = new FormData();
-            fd.append('file', file);
-
-            try {
-                const res = await fetch('/api/search_by_image', { method: 'POST', body: fd });
-                const data = await res.json();
-                if(data.length > 0) {
-                    msg.innerHTML = `<span style="color:#27ae60">✓ Match found! Showing ${data.length} historical hits.</span>`;
-                    renderResults(data, 'img-results-grid');
-                } else {
-                    msg.innerHTML = `<span style="color:var(--accent)">⚠ No historical matches found for this person.</span>`;
-                    grid.innerHTML = '<div class="empty-state"><p>No visual matches found.</p></div>';
-                }
-            } catch(e) {
-                msg.innerText = "Search failed: " + e.message;
-            }
-        }
-
-        // --- TAB 3: VIDEO SCAN ---
-        async function loadVidOptions() {
-            const list = document.getElementById('vid-select-list');
-            try {
-                const res = await fetch('/api/recordings');
-                const data = await res.json();
-                if(!data.length) {
-                    list.innerHTML = '<p style="opacity:.5; padding:10px;">No recordings found in archive.</p>';
-                    return;
-                }
-                list.innerHTML = data.map(v => `
-                    <label class="vid-select-label">
-                        <input type="checkbox" name="vids" value="${v.id}" class="vid-cb">
-                        <span>
-                            <strong>${v.camera_id}</strong> &mdash; 
-                            ${v.start_time.split('T')[0]} 
-                            <small style="opacity:0.6">(${v.file_path.split(/[\\/]/).pop()})</small>
-                        </span>
-                    </label>
-                `).join('');
-            } catch(e) {
-                list.innerHTML = '<p style="color:red; padding:10px;">Failed to fetch archive.</p>';
-            }
-        }
-
-        function getSelectedVids() {
-            return Array.from(document.querySelectorAll('.vid-cb:checked')).map(cb => cb.value);
-        }
-
-        async function vidSearchByName() {
-            const vids = getSelectedVids();
-            const name = document.getElementById('v-name').value;
-            const msg = document.getElementById('v-name-msg');
-            const btn = document.getElementById('vid-name-btn');
-
-            if(!vids.length || !name) { alert("Select videos and enter a name."); return; }
-
-            btn.disabled = true;
-            msg.innerHTML = '<i class="fa-solid fa-gear fa-spin"></i> Deep scanning frames... This takes time.';
-            document.getElementById('vid-results').innerHTML = '';
-
-            try {
-                const res = await fetch('/api/search_video_by_name', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({name, video_ids: vids})
-                });
-                const data = await res.json();
-                renderVidResults(data);
-                msg.innerHTML = `✓ Scan complete. Found ${data.total_segments} occurrences.`;
-            } catch(e) {
-                msg.innerText = "Scan failed.";
-            } finally {
-                btn.disabled = false;
-            }
-        }
-
-        async function vidSearchByImg() {
-            const vids = getSelectedVids();
-            const file = document.getElementById('v-image').files[0];
-            const msg = document.getElementById('v-img-msg');
-            const btn = document.getElementById('vid-img-btn');
-
-            if(!vids.length || !file) { alert("Select videos and upload an image."); return; }
-
-            btn.disabled = true;
-            msg.innerHTML = '<i class="fa-solid fa-gear fa-spin"></i> Deep scanning frames... This takes time.';
-            document.getElementById('vid-results').innerHTML = '';
-
-            const fd = new FormData();
-            fd.append('file', file);
-            fd.append('video_ids', JSON.stringify(vids));
-
-            try {
-                const res = await fetch('/api/search_video_by_image', { method: 'POST', body: fd });
-                const data = await res.json();
-                renderVidResults(data);
-                msg.innerHTML = `✓ Scan complete. Found ${data.total_segments} occurrences.`;
-            } catch(e) {
-                msg.innerText = "Scan failed.";
-            } finally {
-                btn.disabled = false;
-            }
-        }
-
-        function renderVidResults(data) {
-            const container = document.getElementById('vid-results');
-            if(!data.results || data.results.length === 0) {
-                container.innerHTML = '<div class="empty-state"><p>Zero occurrences found in selected footage.</p></div>';
-                return;
-            }
-
-            container.innerHTML = `
-                <h3 style="margin-bottom:15px;">Target Spotted in Footage</h3>
-                <div class="results-grid">
-                ${data.results.map(r => `
-                    <div class="detection-card">
-                        <div style="padding:15px;">
-                            <div style="font-size:1.1rem; font-weight:800; color:var(--accent); margin-bottom:10px;">
-                                ${Math.round(r.confidence * 100)}% Match
-                            </div>
-                            <p class="detection-icon-text"><i class="fa-solid fa-video"></i> ${r.camera_id}</p>
-                            <p class="detection-icon-text"><i class="fa-solid fa-clock"></i> ${r.start_timestamp} - ${r.end_timestamp}</p>
-                            <p class="detection-icon-text" style="font-size:0.7rem; opacity:0.6;"><i class="fa-solid fa-file"></i> ${r.video_name}</p>
-                            <a href="/${r.video_path}" target="_blank" class="btn btn-accent w-full" style="margin-top:10px; padding:8px;">
-                                <i class="fa-solid fa-play"></i> Watch Clip
-                            </a>
-                        </div>
-                    </div>
-                `).join('')}
-                </div>
-            `;
-        }
-    </script>
-</body>
-</html>
+    async function handleVisualProbe(input) {
+        if(!input.files[0]) return;
+        const grid = document.getElementById('visual-results');
+        grid.innerHTML = '<div class="empty-state"><i class="fa-solid fa-fingerprint fa-spin"></i><p>Extracting biometric features...</p></div>';
+        
+        const fd = new FormData();
+        fd.append('file', input.files[0]);
+        
+        try {
+            const res = await fetch('/api/search_by_image', { method: 'POST', body: fd });
+            const data = await res.json();
+            renderResults(data, 'visual-results');
+        } catch(e) { grid.innerHTML = '<div class="empty-state">Visual matching failed</div>'; }
+    }
+</script>
+{% endblock %}

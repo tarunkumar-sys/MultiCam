@@ -7,11 +7,8 @@ import json
 import os
 import logging
 from datetime import datetime, timedelta
-import pytz
-import numpy as np
-
-# IST Timezone
-IST = pytz.timezone('Asia/Kolkata')
+from config.settings import settings
+IST = settings.IST
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
